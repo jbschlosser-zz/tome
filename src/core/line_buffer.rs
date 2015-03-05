@@ -5,21 +5,33 @@ use color_char::ColorChar;
 pub struct LineBuffer {
     lines: Vec<Vec<ColorChar>>,
     max_lines: Option<usize>,
+    max_line_length: Option<usize>,
     line_index: usize
 }
 
 impl LineBuffer {
-    pub fn new(max_lines: Option<usize>) -> LineBuffer {
+    pub fn new(max_lines: Option<usize>, max_line_length: Option<usize>) -> LineBuffer {
         let mut lines = Vec::new();
         lines.push(Vec::new());
-        LineBuffer { lines: lines, max_lines: max_lines, line_index: 0 }
+        LineBuffer {
+            lines: lines,
+            max_lines: max_lines,
+            max_line_length: max_line_length,
+            line_index: 0
+        }
     }
     pub fn insert(&mut self, data: &[ColorChar]) {
         for ch in data {
-            match ch.ch {
-                '\r' => (),
-                '\n' => self.move_to_next_line(),
-                _ => self.lines[self.line_index].push(*ch)
+            match (ch.ch, self.max_line_length) {
+                ('\r', _) => (),
+                ('\n', _) => self.move_to_next_line(),
+                (_, None) => self.lines[self.line_index].push(*ch),
+                (_, Some(m)) => {
+                    if self.lines[self.line_index].len() == m {
+                        self.move_to_next_line();
+                    }
+                    self.lines[self.line_index].push(*ch);
+                }
             }
         }
     }
@@ -44,7 +56,7 @@ impl LineBuffer {
         }
         lines_rev
     }
-    fn move_to_next_line(&mut self) {
+    pub fn move_to_next_line(&mut self) {
         match self.max_lines {
             Some(s) if self.lines.len() == s => {
                 self.line_index = (self.line_index + 1) % s;

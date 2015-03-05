@@ -60,8 +60,8 @@ fn parse_tests() {
 }
 
 #[test]
-fn line_buffer_tests() {
-    let mut line_buffer = LineBuffer::new(Some(3));
+fn line_buffer_get_lines() {
+    let mut line_buffer = LineBuffer::new(Some(3), None);
     let attrs = Attributes {
         style: Style::Normal, fg_color: Color::Default, bg_color: Color::Default
     };
@@ -98,6 +98,23 @@ fn line_buffer_tests() {
     assert_eq!(line_buffer.get_lines(3, 3), Vec::<&[ColorChar]>::new());
     assert_eq!(line_buffer.get_lines(4, 3), Vec::<&[ColorChar]>::new());
     assert_eq!(line_buffer.get_lines(5, 3), Vec::<&[ColorChar]>::new());
+}
+
+#[test]
+fn line_buffer_max_length() {
+    let mut line_buffer = LineBuffer::new(None, Some(5));
+    let attrs = Attributes {
+        style: Style::Normal, fg_color: Color::Default, bg_color: Color::Default
+    };
+    let test_str = make_color_string("Hello world this is a test", attrs);
+    line_buffer.insert(&test_str);
+    assert_eq!(line_buffer.get_lines(0, 50),
+        vec![make_color_string("Hello", attrs),
+        make_color_string(" worl", attrs),
+        make_color_string("d thi", attrs),
+        make_color_string("s is ", attrs),
+        make_color_string("a tes", attrs),
+        make_color_string("t", attrs)]);
 }
 
 #[bench]
@@ -139,7 +156,7 @@ fn bench_handle_server_data(b: &mut Bencher) {
 
 #[bench]
 fn bench_insert(b: &mut Bencher) {
-    let mut buffer = LineBuffer::new(None);
+    let mut buffer = LineBuffer::new(None, None);
     let mut s = String::new();
     for _ in 0..10000 {
         s.push_str("this is a test of the emergency broadcast system\n");
@@ -155,7 +172,7 @@ fn bench_insert(b: &mut Bencher) {
 
 #[bench]
 fn bench_get_lines(b: &mut Bencher) {
-    let mut buffer = LineBuffer::new(None);
+    let mut buffer = LineBuffer::new(None, None);
     let attrs = Attributes {
         style: Style::Normal, fg_color: Color::Default, bg_color: Color::Default
     };

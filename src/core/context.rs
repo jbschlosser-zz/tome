@@ -11,5 +11,11 @@ impl Context {
     pub fn new() -> Context {
         Context {sessions: Vec::new(), session_index: None, bindings: HashMap::new()}
     }
+    pub fn get_current_session(&mut self) -> Option<&mut Session> {
+        match self.session_index {
+            Some(s) => Some(&mut self.sessions[s]),
+            None => None
+        }
+    }
 }
 

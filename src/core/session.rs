@@ -10,7 +10,8 @@ pub struct Session {
     pub telnet: Telnet,
     pub esc_seq: EscSequence,
     pub attrs: Attributes,
-    pub output: (LineBuffer, usize)
+    pub input_buf: (LineBuffer, usize),
+    pub output_buf: (LineBuffer, usize)
 }
 
 impl Session {
@@ -23,7 +24,8 @@ impl Session {
                 fg_color: Color::Default,
                 bg_color: Color::Default
             },
-            output: (LineBuffer::new(None), 0) // TODO: Change this.
+            input_buf: (LineBuffer::new(None, None), 0), // TODO: Change this.
+            output_buf: (LineBuffer::new(None, None), 0) // TODO: Change this.
         }
     }
 }
