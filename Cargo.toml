@@ -7,8 +7,11 @@ authors = ["Joel Schlosser"]
 git = "https://github.com/carllerche/mio.git"
 rev = "b5501184b533f92d39fca165593a3220547e6127"
 
-[dependencies.rustbox]
-git = "https://github.com/gchp/rustbox.git"
+[dependencies.ncurses]
+git = "https://github.com/jeaye/ncurses-rs.git"
+
+#[dependencies.rustbox]
+#git = "https://github.com/gchp/rustbox.git"
 
 [dependencies.regex]
 

@@ -2,7 +2,6 @@
 #![feature(std_misc)]
 
 extern crate mio;
-extern crate rustbox;
 extern crate tome;
 
 use mio::{Handler, TryRead};
@@ -10,8 +9,16 @@ use mio::net::tcp;
 use std::char;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use tome::{handle_server_data, Session, Context, UserInterface, KeyEvent};
+use tome::{handle_server_data, Session, Context, UserInterface};
 use tome::{Attributes, Color, Style, make_color_string};
+
+fn update_ui(ui: &mut UserInterface, sess: &Session) {
+    let scroll_index = sess.output_buf.1;
+    let history_index = sess.input_buf.1;
+    let ui_height = UserInterface::height();
+    ui.update(&sess.output_buf.0.get_lines(scroll_index, ui_height),
+        &sess.input_buf.0.get_lines(history_index, 1));
+}
 
 struct MyHandler(Context, tcp::TcpStream, UserInterface);
 impl Handler<(), ()> for MyHandler {
@@ -22,14 +29,15 @@ impl Handler<(), ()> for MyHandler {
     {
         if token == mio::Token(0) {
             match self.2.check_for_event() {
-                Ok(KeyEvent(_, _, ch)) => {
+                -1 => (),
+                ch => {
                     let sess = self.0.get_current_session().unwrap();
-                    match char::from_u32(ch) {
-                        Some('q') => event_loop.shutdown(),
-                        Some('u') => {
+                    match ch {
+                        0x71 => event_loop.shutdown(),
+                        0x75 => {
                             sess.output_buf.1 += 1;
                         },
-                        Some('d') => {
+                        0x64 => {
                             if sess.output_buf.1 > 0 {
                                 sess.output_buf.1 -= 1;
                             }
@@ -37,14 +45,8 @@ impl Handler<(), ()> for MyHandler {
                         _ => ()
                     }
 
-                    let scroll_index = sess.output_buf.1;
-                    let history_index = sess.input_buf.1;
-                    let ui_height = self.2.height();
-                    self.2.update(&sess.output_buf.0.get_lines(scroll_index, ui_height),
-                        &sess.input_buf.0.get_lines(history_index, 1));
-                },
-                Err(_) => panic!("Bad event found"),
-                _ => ()
+                    update_ui(&mut self.2, sess);
+                }
             }
         } else if token == mio::Token(1) {
             let mut bb = [0; 4096];
@@ -55,11 +57,8 @@ impl Handler<(), ()> for MyHandler {
                     let sess = self.0.get_current_session().unwrap();
                     let chars = handle_server_data(&bb[0..a], sess);
                     sess.output_buf.0.insert(&chars);
-                    let scroll_index = sess.output_buf.1;
-                    let history_index = sess.input_buf.1;
-                    let ui_height = self.2.height();
-                    self.2.update(&sess.output_buf.0.get_lines(scroll_index, ui_height),
-                        &sess.input_buf.0.get_lines(history_index, 1));
+
+                    update_ui(&mut self.2, sess);
                 }
             }
         }
@@ -71,7 +70,8 @@ fn main() {
     let mut event_loop = mio::EventLoop::<(), ()>::new().unwrap();
 
     // Monitor stdin.
-    event_loop.register(&mio::Io::new(0), mio::Token(0)).unwrap();
+    let stdin = mio::Io::new(0);
+    event_loop.register(&stdin, mio::Token(0)).unwrap();
 
     // Connect to server.
     let sock = tcp::TcpSocket::v4().unwrap();
@@ -91,4 +91,7 @@ fn main() {
         &make_color_string("hello", attrs));
     let ui = UserInterface::init();
     let _ = event_loop.run(&mut MyHandler(context, stream, ui));
+
+    // Clean up.
+    UserInterface::teardown();
 }

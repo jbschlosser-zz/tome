@@ -1,138 +1,145 @@
-extern crate rustbox;
-
-pub use self::rustbox::Event;
-pub use self::rustbox::Event::KeyEvent;
-pub use self::rustbox::Event::ResizeEvent;
-pub use self::rustbox::EventResult;
+extern crate ncurses;
 
 use color_char::{ColorChar, Color, Style};
 use line_buffer::LineBuffer;
-use self::rustbox::{InitOptions, RustBox};
 use std::default::Default;
 use std::time::duration::Duration;
 
-fn convert_color(input: Color) -> rustbox::Color {
-    match input {
-        Color::Default => rustbox::Color::Default,
-        Color::Black => rustbox::Color::Black,
-        Color::Red => rustbox::Color::Red,
-        Color::Green => rustbox::Color::Green,
-        Color::Yellow => rustbox::Color::Yellow,
-        Color::Blue => rustbox::Color::Blue,
-        Color::Magenta => rustbox::Color::Magenta,
-        Color::Cyan => rustbox::Color::Cyan,
-        Color::White => rustbox::Color::White
-    }
-}
+static BLACK_ON_DEFAULT_BG: i16 = 1;
+static RED_ON_DEFAULT_BG: i16 = 2;
+static GREEN_ON_DEFAULT_BG: i16 = 3;
+static YELLOW_ON_DEFAULT_BG: i16 = 4;
+static BLUE_ON_DEFAULT_BG: i16 = 5;
+static MAGENTA_ON_DEFAULT_BG: i16 = 6;
+static CYAN_ON_DEFAULT_BG: i16 = 7;
+static WHITE_ON_DEFAULT_BG: i16 = 8;
+static INPUT_LINE_COLOR_PAIR: i16 = 9;
 
-fn convert_style(input: Style) -> rustbox::Style {
-    match input {
-        Style::Normal => rustbox::RB_NORMAL,
-        Style::Bold => rustbox::RB_BOLD,
-        Style::Standout => rustbox::RB_REVERSE,
-    }
-}
+fn convert_char(ch: ColorChar) -> ncurses::chtype {
+    // Handle the fg color.
+    let mut out_char = ch.ch as ncurses::chtype;
+    match ch.attrs.fg_color {
+        Color::Black => out_char = out_char | ncurses::COLOR_PAIR(BLACK_ON_DEFAULT_BG),
+        Color::Red => out_char = out_char | ncurses::COLOR_PAIR(RED_ON_DEFAULT_BG),
+        Color::Green => out_char = out_char | ncurses::COLOR_PAIR(GREEN_ON_DEFAULT_BG),
+        Color::Yellow => out_char = out_char | ncurses::COLOR_PAIR(YELLOW_ON_DEFAULT_BG),
+        Color::Blue => out_char = out_char | ncurses::COLOR_PAIR(BLUE_ON_DEFAULT_BG),
+        Color::Magenta => out_char = out_char |
+            ncurses::COLOR_PAIR(MAGENTA_ON_DEFAULT_BG),
+        Color::Cyan => out_char = out_char | ncurses::COLOR_PAIR(CYAN_ON_DEFAULT_BG),
+        Color::White => out_char = out_char | ncurses::COLOR_PAIR(WHITE_ON_DEFAULT_BG),
+        _ => ()
+    };
 
-struct Window {
-    x: usize,
-    y: usize,
-    width: usize,
-    height: usize,
-    bg_color: rustbox::Color,
-    fg_color: rustbox::Color
+    // TODO: Handle the bg color.
+
+    // Handle the style.
+    match ch.attrs.style {
+        Style::Normal => out_char = out_char | ncurses::A_NORMAL(),
+        Style::Bold => out_char = out_char | ncurses::A_BOLD(),
+        Style::Standout => out_char = out_char | ncurses::A_REVERSE(),
+    }
+
+    return out_char;
 }
 
 pub struct UserInterface {
-    rustbox: RustBox,
-    output_win: Window,
-    input_line: Window
+    output_win: ncurses::WINDOW,
+    input_win: ncurses::WINDOW
 }
 
 impl UserInterface {
     pub fn init() -> UserInterface {
-        let rustbox = match RustBox::init(InitOptions {
-                buffer_stderr: true,
-                ..Default::default()
-            }) {
-                Result::Ok(v) => v,
-                Result::Err(e) => panic!("{}", e)
-            };
-        let ui_width = rustbox.width();
-        let ui_height = rustbox.height();
+        ncurses::initscr();
+        ncurses::keypad(ncurses::stdscr, true);
+        ncurses::cbreak();
+        ncurses::noecho();
+
+        // Init colors.
+        ncurses::start_color();
+        ncurses::use_default_colors();
+        ncurses::init_pair(BLACK_ON_DEFAULT_BG, 0, -1);
+        ncurses::init_pair(RED_ON_DEFAULT_BG, 1, -1);
+        ncurses::init_pair(GREEN_ON_DEFAULT_BG, 2, -1);
+        ncurses::init_pair(YELLOW_ON_DEFAULT_BG, 3, -1);
+        ncurses::init_pair(BLUE_ON_DEFAULT_BG, 4, -1);
+        ncurses::init_pair(MAGENTA_ON_DEFAULT_BG, 5, -1);
+        ncurses::init_pair(CYAN_ON_DEFAULT_BG, 6, -1);
+        ncurses::init_pair(WHITE_ON_DEFAULT_BG, 7, -1);
+        ncurses::init_pair(INPUT_LINE_COLOR_PAIR, 0, 6);
+
+        let ui_width = UserInterface::width() as i32;
+        let ui_height = UserInterface::height() as i32;
+        let output_win = ncurses::newwin(ui_height - 1, ui_width, 0, 0);
+        ncurses::scrollok(output_win, true);
+        let input_win = ncurses::newwin(1, ui_width, ui_height - 1, 0);
+        ncurses::wbkgd(input_win, ncurses::COLOR_PAIR(INPUT_LINE_COLOR_PAIR));
         UserInterface {
-            rustbox: rustbox,
-            output_win: Window {x: 0, y: 0, width: ui_width, height: ui_height - 1,
-                bg_color: rustbox::Color::Blue, fg_color: rustbox::Color::Default},
-            input_line: Window {x: 0, y: ui_height - 1, width: ui_width, height: 1,
-                bg_color: rustbox::Color::Cyan, fg_color: rustbox::Color::Black}
+            output_win: output_win,
+            input_win: input_win
         }
     }
+    pub fn teardown() {
+        ncurses::endwin();
+    }
     pub fn update(&mut self, output_lines: &[&[ColorChar]], input_line: &[&[ColorChar]]) {
-        self.rustbox.clear();
-        
         // Write the output buffer.
-        UserInterface::write_lines_to_window(&self.rustbox, &self.output_win, output_lines);
+        ncurses::werase(self.output_win);
+        UserInterface::write_lines_to_window(&self.output_win, output_lines);
+        ncurses::wrefresh(self.output_win);
 
         // Write the input line.
-        UserInterface::write_lines_to_window(&self.rustbox, &self.input_line, input_line);
-
-        self.rustbox.present();
+        ncurses::werase(self.input_win);
+        UserInterface::write_lines_to_window(&self.input_win, input_line);
+        ncurses::wrefresh(self.input_win);
     }
     /*pub fn resize(&mut self) {
-        let ui_width = self.rustbox.width();
-        let ui_height = self.rustbox.height();
-        self.output_win = Window {x: 0, y: 0, width: ui_width, height: ui_height - 1,
-            bg_color: rustbox::Color::Blue, fg_color: rustbox::Color::Default};
-        self.input_line = Window {x: 0, y: ui_height - 1, width: ui_width, height: 1,
-            bg_color: rustbox::Color::Cyan, fg_color: rustbox::Color::Black};
     }*/
-    fn write_lines_to_window(rustbox: &RustBox, win: &Window, lines: &[&[ColorChar]]) {
+    fn write_lines_to_window(win: &ncurses::WINDOW, lines: &[&[ColorChar]]) {
         // Fit the lines to the window size.
-        let mut screen_buf = LineBuffer::new(Some(win.height), Some(win.width));
+        let mut screen_buf = LineBuffer::new(
+            Some(UserInterface::window_height(win)),
+            Some(UserInterface::window_width(win)));
         for i in 0..lines.len() {
             screen_buf.insert(&lines[i]);
             if i != lines.len() - 1 { screen_buf.move_to_next_line(); }
         }
 
         // Write the lines.
-        //let mut loc_x = win.x;
-        //let mut loc_y = win.y;
-        for i in win.x..(win.x + win.width) {
-            for j in win.y..(win.y + win.height) {
-                rustbox.print(i, j, rustbox::RB_NORMAL, win.fg_color, win.bg_color, " ");
-            }
-        }
-        /*let lines_to_print = screen_buf.get_lines(0, win.height);
+        let lines_to_print = screen_buf.get_lines(0,
+            UserInterface::window_height(win));
         for line in lines_to_print.iter() {
             for ch in line.iter() {
-                let style = convert_style(ch.attrs.style);
-                let fg_color =
-                    if ch.attrs.fg_color == Color::Default {
-                        win.fg_color
-                    } else {
-                        convert_color(ch.attrs.fg_color)
-                    };
-                let bg_color =
-                    if ch.attrs.bg_color == Color::Default {
-                        win.bg_color
-                    } else {
-                        convert_color(ch.attrs.bg_color)
-                    };
-                rustbox.print(loc_x, loc_y, style, fg_color,
-                    bg_color, &ch.ch.to_string());
-                loc_x += 1;
+                ncurses::waddch(*win, convert_char(*ch));
             }
-            loc_x = win.x;
-            loc_y += 1;
-        }*/
+            ncurses::waddch(*win, 0xA);
+        }
     }
-    pub fn check_for_event(&self) -> EventResult<Event> {
-        self.rustbox.peek_event(Duration::milliseconds(0))
+    pub fn check_for_event(&self) -> i32 {
+        ncurses::getch()
     }
-    pub fn width(&self) -> usize {
-        self.rustbox.width()
+    pub fn width() -> usize {
+        let mut x = 0;
+        let mut y = 0;
+        ncurses::getmaxyx(ncurses::stdscr, &mut y, &mut x);
+        return x as usize;
     }
-    pub fn height(&self) -> usize {
-        self.rustbox.height()
+    pub fn height() -> usize {
+        let mut x = 0;
+        let mut y = 0;
+        ncurses::getmaxyx(ncurses::stdscr, &mut y, &mut x);
+        return y as usize;
+    }
+    fn window_width(win: &ncurses::WINDOW) -> usize {
+        let mut x = 0;
+        let mut y = 0;
+        ncurses::getmaxyx(*win, &mut y, &mut x);
+        return x as usize;
+    }
+    fn window_height(win: &ncurses::WINDOW) -> usize {
+        let mut x = 0;
+        let mut y = 0;
+        ncurses::getmaxyx(*win, &mut y, &mut x);
+        return y as usize;
     }
 }
