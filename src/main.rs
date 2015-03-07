@@ -1,16 +1,15 @@
 #![feature(net)]
-#![feature(std_misc)]
 
 extern crate mio;
 extern crate tome;
 
 use mio::{Handler, TryRead};
-use mio::net::tcp;
 use std::char;
+use mio::net::tcp;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tome::{handle_server_data, Session, Context, UserInterface};
-use tome::{Attributes, Color, Style, make_color_string};
+use tome::{ColorChar, Attributes, Color, Style, make_color_string};
 
 fn update_ui(ui: &mut UserInterface, sess: &Session) {
     let scroll_index = sess.output_buf.1;
@@ -28,25 +27,15 @@ impl Handler<(), ()> for MyHandler {
         _: mio::ReadHint)
     {
         if token == mio::Token(0) {
-            match self.2.check_for_event() {
-                -1 => (),
-                ch => {
-                    let sess = self.0.get_current_session().unwrap();
-                    match ch {
-                        0x71 => event_loop.shutdown(),
-                        0x75 => {
-                            sess.output_buf.1 += 1;
-                        },
-                        0x64 => {
-                            if sess.output_buf.1 > 0 {
-                                sess.output_buf.1 -= 1;
-                            }
-                        },
-                        _ => ()
+            match self.0.do_binding(self.2.check_for_event()) {
+                Some(keep_going) => {
+                    if keep_going {
+                        update_ui(&mut self.2, self.0.get_current_session().unwrap());
+                    } else {
+                        event_loop.shutdown();
                     }
-
-                    update_ui(&mut self.2, sess);
-                }
+                },
+                None => ()
             }
         } else if token == mio::Token(1) {
             let mut bb = [0; 4096];
@@ -89,6 +78,31 @@ fn main() {
     };
     context.get_current_session().unwrap().input_buf.0.insert(
         &make_color_string("hello", attrs));
+    context.bindings.insert(0x71, Box::new(|_: &mut Session| false));
+    /*context.bindings.insert(0x75, Box::new(|sess: &mut Session| {
+        sess.output_buf.1 += 1;
+        true
+    }));
+    context.bindings.insert(0x64, Box::new(|sess: &mut Session| {
+        if sess.output_buf.1 > 0 {
+            sess.output_buf.1 -= 1;
+        }
+        true
+    }));*/
+    for i in 0x20..0x71 {
+        context.bindings.insert(i, Box::new(move |sess: &mut Session| {
+            sess.input_buf.0.insert_single(
+                ColorChar {ch: char::from_u32(i as u32).unwrap(), attrs: attrs});
+            true
+        }));
+    }
+    for i in 0x72..0x7F {
+        context.bindings.insert(i, Box::new(move |sess: &mut Session| {
+            sess.input_buf.0.insert_single(
+                ColorChar {ch: char::from_u32(i as u32).unwrap(), attrs: attrs});
+            true
+        }));
+    }
     let ui = UserInterface::init();
     let _ = event_loop.run(&mut MyHandler(context, stream, ui));
 

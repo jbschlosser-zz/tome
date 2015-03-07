@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub struct Context {
     pub sessions: Vec<Session>,
     pub session_index: Option<usize>,
-    pub bindings: HashMap<i64, Box<FnMut(&mut Session)>>,
+    pub bindings: HashMap<i32, Box<FnMut(&mut Session) -> bool>>,
 }
 
 impl Context {
@@ -14,6 +14,14 @@ impl Context {
     pub fn get_current_session(&mut self) -> Option<&mut Session> {
         match self.session_index {
             Some(s) => Some(&mut self.sessions[s]),
+            None => None
+        }
+    }
+    pub fn do_binding(&mut self, key: i32) -> Option<bool> {
+        match self.bindings.get_mut(&key) {
+            Some(binding) => {
+                Some(binding(&mut self.sessions[self.session_index.unwrap()]))
+            },
             None => None
         }
     }

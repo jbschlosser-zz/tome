@@ -1,9 +1,6 @@
 extern crate ncurses;
 
 use color_char::{ColorChar, Color, Style};
-use line_buffer::LineBuffer;
-use std::default::Default;
-use std::time::duration::Duration;
 
 static BLACK_ON_DEFAULT_BG: i16 = 1;
 static RED_ON_DEFAULT_BG: i16 = 2;

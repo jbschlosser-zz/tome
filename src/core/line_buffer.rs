@@ -22,16 +22,19 @@ impl LineBuffer {
     }
     pub fn insert(&mut self, data: &[ColorChar]) {
         for ch in data {
-            match (ch.ch, self.max_line_length) {
-                ('\r', _) => (),
-                ('\n', _) => self.move_to_next_line(),
-                (_, None) => self.lines[self.line_index].push(*ch),
-                (_, Some(m)) => {
-                    if self.lines[self.line_index].len() == m {
-                        self.move_to_next_line();
-                    }
-                    self.lines[self.line_index].push(*ch);
+            self.insert_single(*ch);
+        }
+    }
+    pub fn insert_single(&mut self, ch: ColorChar) {
+        match (ch.ch, self.max_line_length) {
+            ('\r', _) => (),
+            ('\n', _) => self.move_to_next_line(),
+            (_, None) => self.lines[self.line_index].push(ch),
+            (_, Some(m)) => {
+                if self.lines[self.line_index].len() == m {
+                    self.move_to_next_line();
                 }
+                self.lines[self.line_index].push(ch);
             }
         }
     }
