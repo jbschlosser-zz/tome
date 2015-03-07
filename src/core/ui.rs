@@ -118,16 +118,4 @@ impl UserInterface {
         ncurses::getmaxyx(ncurses::stdscr, &mut y, &mut x);
         return y as usize;
     }
-    fn window_width(win: &ncurses::WINDOW) -> usize {
-        let mut x = 0;
-        let mut y = 0;
-        ncurses::getmaxyx(*win, &mut y, &mut x);
-        return x as usize;
-    }
-    fn window_height(win: &ncurses::WINDOW) -> usize {
-        let mut x = 0;
-        let mut y = 0;
-        ncurses::getmaxyx(*win, &mut y, &mut x);
-        return y as usize;
-    }
 }
