@@ -96,23 +96,11 @@ impl UserInterface {
     /*pub fn resize(&mut self) {
     }*/
     fn write_lines_to_window(win: &ncurses::WINDOW, lines: &[&[ColorChar]]) {
-        // Fit the lines to the window size.
-        let mut screen_buf = LineBuffer::new(
-            Some(UserInterface::window_height(win)),
-            Some(UserInterface::window_width(win)));
         for i in 0..lines.len() {
-            screen_buf.insert(&lines[i]);
-            if i != lines.len() - 1 { screen_buf.move_to_next_line(); }
-        }
-
-        // Write the lines.
-        let lines_to_print = screen_buf.get_lines(0,
-            UserInterface::window_height(win));
-        for line in lines_to_print.iter() {
-            for ch in line.iter() {
+            for ch in lines[i] {
                 ncurses::waddch(*win, convert_char(*ch));
             }
-            ncurses::waddch(*win, 0xA);
+            if i != lines.len() - 1 { ncurses::waddch(*win, 0xA); }
         }
     }
     pub fn check_for_event(&self) -> i32 {
