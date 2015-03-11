@@ -5,7 +5,6 @@ authors = ["Joel Schlosser"]
 
 [dependencies.mio]
 git = "https://github.com/carllerche/mio.git"
-rev = "b5501184b533f92d39fca165593a3220547e6127"
 
 [dependencies.ncurses]
 git = "https://github.com/jeaye/ncurses-rs.git"

@@ -1,3 +1,4 @@
+#![feature(io)]
 #![feature(net)]
 
 extern crate mio;
@@ -5,9 +6,8 @@ extern crate tome;
 
 use mio::{Handler, TryRead};
 use std::char;
-use mio::net::tcp;
-use std::net::SocketAddr;
-use std::str::FromStr;
+use std::io::Read;
+use std::net::TcpStream;
 use tome::{handle_server_data, Session, Context, UserInterface};
 use tome::{ColorChar, Attributes, Color, Style, make_color_string};
 
@@ -19,10 +19,13 @@ fn update_ui(ui: &mut UserInterface, sess: &Session) {
         &sess.input_buf.0.get_lines(history_index, 1));
 }
 
-struct MyHandler(Context, tcp::TcpStream, UserInterface);
-impl Handler<(), ()> for MyHandler {
+struct MyHandler(Context, TcpStream, UserInterface);
+impl Handler for MyHandler {
+    type Timeout = mio::NonBlock<TcpStream>;
+    type Message = ();
+
     fn readable(&mut self,
-        event_loop: &mut mio::EventLoop<(), ()>,
+        event_loop: &mut mio::EventLoop<MyHandler>,
         token: mio::Token,
         _: mio::ReadHint)
     {
@@ -38,17 +41,16 @@ impl Handler<(), ()> for MyHandler {
                 None => ()
             }
         } else if token == mio::Token(1) {
-            let mut bb = [0; 4096];
-            match self.1.read_slice(&mut bb) {
-                Err(_) => panic!("An error occurred"),
-                Ok(None) => panic!("Would block"),
-                Ok(Some(a)) => {
+            let mut buffer = [0; 4096];
+            match self.1.read(&mut buffer) {
+                Ok(a) =>  {
                     let sess = self.0.get_current_session().unwrap();
-                    let chars = handle_server_data(&bb[0..a], sess);
+                    let chars = handle_server_data(&buffer[0..a], sess);
                     sess.output_buf.0.insert(&chars);
 
                     update_ui(&mut self.2, sess);
-                }
+                },
+                Err(_) => panic!("Error when reading from socket")
             }
         }
     }
@@ -56,17 +58,14 @@ impl Handler<(), ()> for MyHandler {
 
 fn main() {
     // Set up event loop.
-    let mut event_loop = mio::EventLoop::<(), ()>::new().unwrap();
+    let mut event_loop = mio::EventLoop::new().unwrap();
 
     // Monitor stdin.
     let stdin = mio::Io::new(0);
     event_loop.register(&stdin, mio::Token(0)).unwrap();
 
     // Connect to server.
-    let sock = tcp::TcpSocket::v4().unwrap();
-    let sock_addr = SocketAddr::from_str("66.228.38.196:8679").unwrap();
-    let result = sock.connect(&sock_addr).unwrap();
-    let stream = result.0;
+    let stream = TcpStream::connect("66.228.38.196:8679").unwrap();
     event_loop.register(&stream, mio::Token(1)).unwrap();
 
     // Run the main loop.
