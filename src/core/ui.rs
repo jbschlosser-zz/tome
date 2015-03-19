@@ -1,6 +1,6 @@
 extern crate ncurses;
 
-use color_char::{ColorChar, Color, Style};
+use formatted_string::{FormattedString, Format, Color, Style};
 
 static BLACK_ON_DEFAULT_BG: i16 = 1;
 static RED_ON_DEFAULT_BG: i16 = 2;
@@ -12,10 +12,10 @@ static CYAN_ON_DEFAULT_BG: i16 = 7;
 static WHITE_ON_DEFAULT_BG: i16 = 8;
 static INPUT_LINE_COLOR_PAIR: i16 = 9;
 
-fn convert_char(ch: ColorChar) -> ncurses::chtype {
+fn convert_char(ch: char, format: Format) -> ncurses::chtype {
     // Handle the fg color.
-    let mut out_char = ch.ch as ncurses::chtype;
-    match ch.attrs.fg_color {
+    let mut out_char = ch as ncurses::chtype;
+    match format.fg_color {
         Color::Black => out_char = out_char | ncurses::COLOR_PAIR(BLACK_ON_DEFAULT_BG),
         Color::Red => out_char = out_char | ncurses::COLOR_PAIR(RED_ON_DEFAULT_BG),
         Color::Green => out_char = out_char | ncurses::COLOR_PAIR(GREEN_ON_DEFAULT_BG),
@@ -31,7 +31,7 @@ fn convert_char(ch: ColorChar) -> ncurses::chtype {
     // TODO: Handle the bg color.
 
     // Handle the style.
-    match ch.attrs.style {
+    match format.style {
         Style::Normal => out_char = out_char | ncurses::A_NORMAL(),
         Style::Bold => out_char = out_char | ncurses::A_BOLD(),
         Style::Standout => out_char = out_char | ncurses::A_REVERSE(),
@@ -79,7 +79,7 @@ impl UserInterface {
     pub fn teardown() {
         ncurses::endwin();
     }
-    pub fn update(&mut self, output_lines: &[&[ColorChar]], input_line: &[&[ColorChar]]) {
+    pub fn update(&mut self, output_lines: &[&FormattedString], input_line: &[&FormattedString]) {
         // Write the output buffer.
         ncurses::werase(self.output_win);
         UserInterface::write_lines_to_window(&self.output_win, output_lines);
@@ -92,10 +92,10 @@ impl UserInterface {
     }
     /*pub fn resize(&mut self) {
     }*/
-    fn write_lines_to_window(win: &ncurses::WINDOW, lines: &[&[ColorChar]]) {
+    fn write_lines_to_window(win: &ncurses::WINDOW, lines: &[&FormattedString]) {
         for i in 0..lines.len() {
-            for ch in lines[i] {
-                ncurses::waddch(*win, convert_char(*ch));
+            for (ch, format) in lines[i].iter() {
+                ncurses::waddch(*win, convert_char(ch, format));
             }
             if i != lines.len() - 1 { ncurses::waddch(*win, 0xA); }
         }

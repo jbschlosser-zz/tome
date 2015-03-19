@@ -1,9 +1,9 @@
 use std::vec::Vec;
-use color_char::ColorChar;
+use formatted_string::{FormattedString, Format};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct LineBuffer {
-    lines: Vec<Vec<ColorChar>>,
+    lines: Vec<FormattedString>,
     max_lines: Option<usize>,
     max_line_length: Option<usize>,
     line_index: usize
@@ -12,7 +12,7 @@ pub struct LineBuffer {
 impl LineBuffer {
     pub fn new(max_lines: Option<usize>, max_line_length: Option<usize>) -> LineBuffer {
         let mut lines = Vec::new();
-        lines.push(Vec::new());
+        lines.push(FormattedString::new());
         LineBuffer {
             lines: lines,
             max_lines: max_lines,
@@ -20,25 +20,25 @@ impl LineBuffer {
             line_index: 0
         }
     }
-    pub fn insert(&mut self, data: &[ColorChar]) {
-        for ch in data {
-            self.insert_single(*ch);
+    pub fn insert(&mut self, data: &FormattedString) {
+        for (ch, format) in data.iter() {
+            self.insert_single(ch, format);
         }
     }
-    pub fn insert_single(&mut self, ch: ColorChar) {
-        match (ch.ch, self.max_line_length) {
+    pub fn insert_single(&mut self, ch: char, format: Format) {
+        match (ch, self.max_line_length) {
             ('\r', _) => (),
             ('\n', _) => self.move_to_next_line(),
-            (_, None) => self.lines[self.line_index].push(ch),
+            (_, None) => self.lines[self.line_index].push(ch, format),
             (_, Some(m)) => {
                 if self.lines[self.line_index].len() == m {
                     self.move_to_next_line();
                 }
-                self.lines[self.line_index].push(ch);
+                self.lines[self.line_index].push(ch, format);
             }
         }
     }
-    pub fn get_lines(&self, scrollback: usize, max_lines: usize) -> Vec<&[ColorChar]> {
+    pub fn get_lines(&self, scrollback: usize, max_lines: usize) -> Vec<&FormattedString> {
         if scrollback >= self.lines.len() { return Vec::new() };
         let starting_index =
             if scrollback <= self.line_index
@@ -50,7 +50,7 @@ impl LineBuffer {
         let mut lines = Vec::with_capacity(num_lines);
         let mut i = starting_index;
         while lines.len() < num_lines {
-            lines.push(&self.lines[i][..]);
+            lines.push(&self.lines[i]);
             i = if i == 0 {num_lines - 1} else {i - 1};
         }
         let mut lines_rev = Vec::with_capacity(num_lines); 
@@ -63,10 +63,10 @@ impl LineBuffer {
         match self.max_lines {
             Some(s) if self.lines.len() == s => {
                 self.line_index = (self.line_index + 1) % s;
-                self.lines[self.line_index] = Vec::new();
+                self.lines[self.line_index] = FormattedString::new();
             },
             _ => {
-                self.lines.push(Vec::new());
+                self.lines.push(FormattedString::new());
                 self.line_index += 1;
             }
         }

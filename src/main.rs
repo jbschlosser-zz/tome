@@ -9,7 +9,7 @@ use std::char;
 use std::io::Read;
 use std::net::TcpStream;
 use tome::{handle_server_data, Session, Context, UserInterface};
-use tome::{ColorChar, Attributes, Color, Style, make_color_string};
+use tome::{FormattedString, Format};
 
 fn update_ui(ui: &mut UserInterface, sess: &Session) {
     let scroll_index = sess.output_buf.1;
@@ -72,11 +72,9 @@ fn main() {
     let mut context = Context::new();
     context.sessions.push(Session::new());
     context.session_index = Some(0);
-    let attrs = Attributes {
-        style: Style::Normal, fg_color: Color::Default, bg_color: Color::Default
-    };
+    let format = Format::default();
     context.get_current_session().unwrap().input_buf.0.insert(
-        &make_color_string("hello", attrs));
+        &FormattedString::with_format("hello", format));
     context.bindings.insert(0x71, Box::new(|_: &mut Session| false));
     /*context.bindings.insert(0x75, Box::new(|sess: &mut Session| {
         sess.output_buf.1 += 1;
@@ -91,14 +89,14 @@ fn main() {
     for i in 0x20..0x71 {
         context.bindings.insert(i, Box::new(move |sess: &mut Session| {
             sess.input_buf.0.insert_single(
-                ColorChar {ch: char::from_u32(i as u32).unwrap(), attrs: attrs});
+                char::from_u32(i as u32).unwrap(), format);
             true
         }));
     }
     for i in 0x72..0x7F {
         context.bindings.insert(i, Box::new(move |sess: &mut Session| {
             sess.input_buf.0.insert_single(
-                ColorChar {ch: char::from_u32(i as u32).unwrap(), attrs: attrs});
+                char::from_u32(i as u32).unwrap(), format);
             true
         }));
     }

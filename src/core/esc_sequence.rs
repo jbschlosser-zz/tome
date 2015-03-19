@@ -1,7 +1,6 @@
 extern crate regex;
 
-use color_char::Style;
-use color_char::Color;
+use formatted_string::{Style, Color};
 use self::regex::Regex;
 
 pub const ESC_SEQUENCE_BEGIN: u8 = 0x1B;
