@@ -1,6 +1,3 @@
-#![feature(io)]
-#![feature(net)]
-
 extern crate mio;
 extern crate tome;
 

@@ -1,5 +1,4 @@
 #![feature(collections)]
-#![feature(test)]
 
 mod telnet;
 mod esc_sequence;
