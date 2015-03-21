@@ -4,58 +4,50 @@ use super::*;
 use self::test::Bencher;
 
 #[test]
-fn esc_sequence_empty() {
-    let mut seq = EscSequence::new();
-    assert!(!seq.in_progress());
-    assert_eq!(seq.update(ESC_SEQUENCE_BEGIN), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update(ESC_SEQUENCE_END).unwrap(), "\u{1b}m");
-    assert!(!seq.in_progress());
+fn parse_esc_seq_tests() {
+    // Start of esc sequence.
+    assert_eq!(parse_esc_seq(&ParseState::NotInProgress, b'\x1b'),
+        ParseState::InProgress(b"\x1b".to_vec()));
+
+    // Middle of esc sequence.
+    assert_eq!(parse_esc_seq(
+        &ParseState::InProgress(b"\x1b[0;".to_vec()), b'5'),
+        ParseState::InProgress(b"\x1b[0;5".to_vec()));
+
+    // End of esc sequence.
+    assert_eq!(parse_esc_seq(
+        &ParseState::InProgress(b"\x1b[0;32".to_vec()), b'm'),
+        ParseState::Success(b"\x1b[0;32m".to_vec()));
+
+    // Esc sequence too big.
+    assert_eq!(parse_esc_seq(
+        &ParseState::InProgress(b"\x1babcdefghijklmno".to_vec()), b'p'),
+        ParseState::Error(b"\x1babcdefghijklmnop".to_vec()));
 }
 
 #[test]
-fn esc_sequence_full() {
-    let mut seq = EscSequence::new();
-    assert!(!seq.in_progress());
-    assert_eq!(seq.update(ESC_SEQUENCE_BEGIN), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update('[' as u8), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update('1' as u8), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update(';' as u8), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update('3' as u8), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update('1' as u8), None);
-    assert!(seq.in_progress());
-    assert_eq!(seq.update(ESC_SEQUENCE_END).unwrap(), "\u{1b}[1;31m");
-    assert!(!seq.in_progress());
-}
-
-#[test]
-fn parse_tests() {
+fn interpret_esc_seq_tests() {
     // Error cases.
-    assert_eq!(EscSequence::parse(""), (None, None, None));
-    assert_eq!(EscSequence::parse("fkjtkekthgfgo"), (None, None, None));
-    assert_eq!(EscSequence::parse("\u{1b}m"), (None, None, None));
-    assert_eq!(EscSequence::parse("\u{1b}[123m"), (None, None, None));
+    assert_eq!(interpret_esc_seq(b""), (None, None, None));
+    assert_eq!(interpret_esc_seq(b"fkjtkekthgfgo"), (None, None, None));
+    assert_eq!(interpret_esc_seq(b"\x1bm"), (None, None, None));
+    assert_eq!(interpret_esc_seq(b"\x1b[123m"), (None, None, None));
 
     // Success cases.
-    assert_eq!(EscSequence::parse("\u{1b}[m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[m"),
         (Some(Style::Normal), Some(Color::Default), Some(Color::Default)));
-    assert_eq!(EscSequence::parse("\u{1b}[0m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[0m"),
         (Some(Style::Normal), Some(Color::Default), Some(Color::Default)));
-    assert_eq!(EscSequence::parse("\u{1b}[1m"), (Some(Style::Bold), None, None));
-    assert_eq!(EscSequence::parse("\u{1b}[1;31m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[1m"), (Some(Style::Bold), None, None));
+    assert_eq!(interpret_esc_seq(b"\x1b[1;31m"),
         (Some(Style::Bold), Some(Color::Red), None));
-    assert_eq!(EscSequence::parse("\u{1b}[31;1m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[31;1m"),
         (Some(Style::Bold), Some(Color::Red), None));
-    assert_eq!(EscSequence::parse("\u{1b}[1;31;34;5;2;42m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[1;31;34;5;2;42m"),
         (Some(Style::Bold), Some(Color::Blue), Some(Color::Green)));
-    assert_eq!(EscSequence::parse("\u{1b}[1;31;;;2;42m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[1;31;;;2;42m"),
         (Some(Style::Bold), Some(Color::Red), Some(Color::Green)));
-    assert_eq!(EscSequence::parse("\u{1b}[42;;;31;;;2;;1m"),
+    assert_eq!(interpret_esc_seq(b"\x1b[42;;;31;;;2;;1m"),
         (Some(Style::Bold), Some(Color::Red), Some(Color::Green)));
 }
 

@@ -3,6 +3,13 @@ name = "tome"
 version = "0.0.1"
 authors = ["Joel Schlosser"]
 
+[dependencies]
+log = "0.2"
+
+[dependencies.systemd]
+#git = "https://github.com/jmesmon/rust-systemd"
+path = "../rust-systemd"
+
 [dependencies.mio]
 #git = "https://github.com/carllerche/mio.git"
 path = "../mio"
