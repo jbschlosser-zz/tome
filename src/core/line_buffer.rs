@@ -20,12 +20,13 @@ impl LineBuffer {
             line_index: 0
         }
     }
-    pub fn insert(&mut self, data: &FormattedString) {
+    pub fn len(&self) -> usize { self.lines.len() }
+    pub fn push(&mut self, data: &FormattedString) {
         for (ch, format) in data.iter() {
-            self.insert_single(ch, format);
+            self.push_single(ch, format);
         }
     }
-    pub fn insert_single(&mut self, ch: char, format: Format) {
+    pub fn push_single(&mut self, ch: char, format: Format) {
         match (ch, self.max_line_length) {
             ('\r', _) => (),
             ('\n', _) => self.move_to_next_line(),
@@ -36,6 +37,32 @@ impl LineBuffer {
                 }
                 self.lines[self.line_index].push(ch, format);
             }
+        }
+    }
+    pub fn get_line(&self, scroll: usize) -> &FormattedString {
+        let mut sb = scroll;
+        if sb >= self.len() {
+            sb = self.len() - 1;
+        }
+        
+        if sb <= self.line_index {
+            &self.lines[self.line_index - sb]
+        } else {
+            &self.lines[self.line_index + self.len() - sb]
+        }
+    }
+    pub fn get_line_mut(&mut self, scroll: usize) -> &mut FormattedString {
+        let mut sb = scroll;
+        if sb >= self.len() {
+            sb = self.len() - 1;
+        }
+        
+        let curr = self.line_index;
+        if sb <= self.line_index {
+            &mut self.lines[curr - sb]
+        } else {
+            let len = self.len();
+            &mut self.lines[curr + len - sb]
         }
     }
     pub fn get_lines(&self, scrollback: usize, max_lines: usize) -> Vec<&FormattedString> {

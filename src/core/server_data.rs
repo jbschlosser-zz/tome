@@ -27,8 +27,8 @@ pub fn handle_server_data(data: &[u8], session: &mut Session) -> FormattedString
                     },
                     ParseState::InProgress(_) => (),
                     ParseState::Success(ref seq) => {
-                        journal::print(1,
-                            &format!("Esc sequence found: {:?}", seq));
+                        //journal::print(1,
+                        //    &format!("Esc sequence found: {:?}", seq));
                         handle_esc_seq(&seq, session);
                     },
                     ParseState::Error(ref bad_seq) => {

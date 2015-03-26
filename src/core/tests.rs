@@ -58,7 +58,7 @@ fn line_buffer_get_lines() {
         style: Style::Normal, fg_color: Color::Default, bg_color: Color::Default
     };
     let test_str = FormattedString::with_format("Hello\nworld\nthis\nis\na\ntest", format);
-    line_buffer.insert(&test_str);
+    line_buffer.push(&test_str);
 
     assert_eq!(line_buffer.get_lines(0, 1),
         vec![&FormattedString::with_format("test", format)]);
@@ -99,7 +99,7 @@ fn line_buffer_max_length() {
         style: Style::Normal, fg_color: Color::Default, bg_color: Color::Default
     };
     let test_str = FormattedString::with_format("Hello world this is a test", format);
-    line_buffer.insert(&test_str);
+    line_buffer.push(&test_str);
     assert_eq!(line_buffer.get_lines(0, 50),
         vec![&FormattedString::with_format("Hello", format),
         &FormattedString::with_format(" worl", format),
@@ -130,7 +130,7 @@ fn formatted_string_tests() {
 }
 
 #[bench]
-fn bench_handle_server_data(b: &mut Bencher) {
+/*fn bench_handle_server_data(b: &mut Bencher) {
     let mut bb = [0; 100000];
     let mut selector = 0;
     let mut sub = 0;
@@ -164,10 +164,10 @@ fn bench_handle_server_data(b: &mut Bencher) {
     b.iter(|| {
         handle_server_data(&bb, &mut session)
     });
-}
+}*/
 
 #[bench]
-fn bench_insert(b: &mut Bencher) {
+fn bench_push(b: &mut Bencher) {
     let mut buffer = LineBuffer::new(None, None);
     let mut s = String::new();
     for _ in 0..10000 {
@@ -178,7 +178,7 @@ fn bench_insert(b: &mut Bencher) {
     };
     let cs = FormattedString::with_format(&s, format);
     b.iter(|| {
-        buffer.insert(&cs)
+        buffer.push(&cs)
     });
 }
 
@@ -191,7 +191,7 @@ fn bench_get_lines(b: &mut Bencher) {
     for _ in 0..50000 {
         let cs =
             FormattedString::with_format("this is a test of the emergency broadcast system\n", format);
-        buffer.insert(&cs);
+        buffer.push(&cs);
     }
     b.iter(|| {
         buffer.get_lines(1000, 50)

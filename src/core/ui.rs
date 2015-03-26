@@ -69,7 +69,9 @@ impl UserInterface {
         let ui_height = UserInterface::height() as i32;
         let output_win = ncurses::newwin(ui_height - 1, ui_width, 0, 0);
         ncurses::scrollok(output_win, true);
+        ncurses::keypad(output_win, true); 
         let input_win = ncurses::newwin(1, ui_width, ui_height - 1, 0);
+        ncurses::keypad(input_win, true); 
         ncurses::wbkgd(input_win, ncurses::COLOR_PAIR(INPUT_LINE_COLOR_PAIR));
         UserInterface {
             output_win: output_win,
@@ -79,7 +81,11 @@ impl UserInterface {
     pub fn teardown() {
         ncurses::endwin();
     }
-    pub fn update(&mut self, output_lines: &[&FormattedString], input_line: &[&FormattedString]) {
+    pub fn update(&mut self,
+        output_lines: &[&FormattedString],
+        input_line: &[&FormattedString],
+        cursor_index: usize)
+    {
         // Write the output buffer.
         ncurses::werase(self.output_win);
         UserInterface::write_lines_to_window(&self.output_win, output_lines);
@@ -88,6 +94,7 @@ impl UserInterface {
         // Write the input line.
         ncurses::werase(self.input_win);
         UserInterface::write_lines_to_window(&self.input_win, input_line);
+        ncurses::wmove(self.input_win, 0, cursor_index as i32);
         ncurses::wrefresh(self.input_win);
     }
     /*pub fn resize(&mut self) {
@@ -101,7 +108,7 @@ impl UserInterface {
         }
     }
     pub fn check_for_event(&self) -> i32 {
-        ncurses::getch()
+        ncurses::wgetch(self.input_win)
     }
     pub fn width() -> usize {
         let mut x = 0;

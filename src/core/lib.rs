@@ -1,8 +1,7 @@
 #![feature(collections)]
 #![feature(str_char)]
+#![feature(test)]
 
-#[macro_use]
-extern crate log;
 extern crate regex;
 extern crate systemd;
 

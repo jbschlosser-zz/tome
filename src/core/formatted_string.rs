@@ -57,6 +57,18 @@ impl FormattedString {
         self.chars.push(ch);
         self.formats.push(format);
     }
+    pub fn insert(&mut self, index: usize, ch: char, format: Format) {
+        self.chars.insert(index, ch);
+        self.formats.insert(index, format);
+    }
+    pub fn remove(&mut self, index: usize) {
+        self.chars.remove(index);
+        self.formats.remove(index);
+    }
+    pub fn clear(&mut self) {
+        self.chars.clear();
+        self.formats.clear();
+    }
     pub fn append(&mut self, other: &FormattedString) {
         self.chars.reserve(other.len());
         self.formats.reserve(other.len());
