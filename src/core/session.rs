@@ -2,6 +2,7 @@ use formatted_string::{FormattedString, Format, Color, Style};
 use line_buffer::LineBuffer;
 use server_data::ParseState;
 use std::net::TcpStream;
+use mio::NonBlock;
 
 pub trait HasLength {
     fn len(&self) -> usize;
@@ -45,7 +46,7 @@ impl HasLength for FormattedString {
 }
 
 pub struct Session {
-    pub connection: TcpStream,
+    pub connection: NonBlock<TcpStream>,
     pub telnet_state: ParseState,
     pub esc_seq_state: ParseState,
     pub char_format: Format,
@@ -55,7 +56,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(connection: TcpStream) -> Session {
+    pub fn new(connection: NonBlock<TcpStream>) -> Session {
         Session {
             connection: connection,
             telnet_state: ParseState::NotInProgress,

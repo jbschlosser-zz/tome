@@ -197,3 +197,12 @@ fn bench_get_lines(b: &mut Bencher) {
         buffer.get_lines(1000, 50)
     });
 }
+
+use std::net::TcpStream;
+#[bench]
+fn bench_connect(b: &mut Bencher) {
+    b.iter(|| {
+        //TcpStream::connect("74.125.196.104:80").unwrap()
+        TcpStream::connect("5.6.7.8:80")
+    });
+}

@@ -3,11 +3,10 @@
 extern crate mio;
 extern crate tome;
 
-use mio::{Handler, TryRead};
+use mio::{Handler, TryRead, TryWrite};
 use std::char;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpStream;
+use std::net::{TcpStream, SocketAddr};
+use std::str::FromStr;
 use tome::{handle_server_data, Session, Context, UserInterface};
 use tome::{FormattedString, Format, Color};
 
@@ -51,16 +50,28 @@ impl Handler for MyHandler {
         } else if token == mio::Token(1) {
             let mut buffer = [0; 4096];
             let sess = self.0.get_current_session().unwrap();
-            match sess.connection.read(&mut buffer) {
-                Ok(a) =>  {
+            match sess.connection.read_slice(&mut buffer) {
+                Ok(Some(a)) =>  {
                     let chars = handle_server_data(&buffer[0..a], sess);
                     sess.scrollback_buf.data.push(&chars);
 
                     update_ui(&mut self.1, sess);
                 },
+                Ok(None) => (),
                 Err(_) => panic!("Error when reading from socket")
             }
         }
+    }
+    fn writable(&mut self,
+        _: &mut mio::EventLoop<MyHandler>,
+        token: mio::Token)
+    {
+        //if token == mio::Token(1) {
+            let sess = self.0.get_current_session().unwrap();
+            sess.scrollback_buf.data.push(&FormattedString::with_color(
+                &format!("Connected!"), Color::Green));
+            update_ui(&mut self.1, sess);
+        //}
     }
 }
 
@@ -72,15 +83,10 @@ fn main() {
     let stdin = mio::Io::new(0);
     event_loop.register(&stdin, mio::Token(0)).unwrap();
 
-    // Connect to server.
-    let stream = TcpStream::connect("66.228.38.196:8679").unwrap();
-    event_loop.register(&stream, mio::Token(1)).unwrap();
-
-    // Run the main loop.
+    // Set up the context.
     let mut context = Context::new();
-    context.sessions.push(Session::new(stream));
-    context.session_index = Some(0);
 
+    // Set up the key bindings.
     // Q (quit)
     context.bindings.insert(0x71, Box::new(|_: &mut Session| false));
 
@@ -125,7 +131,7 @@ fn main() {
         let mut send_data = String::from_str(sess.history.data.get_line(
             sess.history.index()).to_str());
         send_data.push_str("\r\n");
-        sess.connection.write(send_data.as_bytes()); // TODO: Check result.
+        sess.connection.write_slice(send_data.as_bytes()); // TODO: Check result.
 
         // Add the input to the scrollback buffer.
         sess.scrollback_buf.data.push(
@@ -202,7 +208,31 @@ fn main() {
         }));
     }
 
-    let ui = UserInterface::init();
+    // Initialize the UI.
+    let mut ui = UserInterface::init();
+
+    // Monitor the socket.
+    let socket = mio::tcp::v4().unwrap();
+    event_loop.register(&socket, mio::Token(1)).unwrap();
+
+    // Connect to the server.
+    let (stream, result) = socket.connect(
+        &SocketAddr::from_str("66.228.38.196:8679").unwrap()).unwrap();
+    context.sessions.push(Session::new(stream));
+    context.session_index = Some(0);
+    {
+        let sess = context.get_current_session().unwrap();
+        if result {
+            sess.scrollback_buf.data.push(&FormattedString::with_color(
+                &format!("Connected!"), Color::Blue));
+            update_ui(&mut ui, &sess);
+        } else {
+            sess.scrollback_buf.data.push(&FormattedString::with_color(
+                &format!("Not quite connected!"), Color::Blue));
+            update_ui(&mut ui, &sess);
+        }
+    }
+
     let _ = event_loop.run(&mut MyHandler(context, ui));
 
     // Clean up.

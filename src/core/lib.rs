@@ -2,6 +2,7 @@
 #![feature(str_char)]
 #![feature(test)]
 
+extern crate mio;
 extern crate regex;
 extern crate systemd;
 
