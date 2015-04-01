@@ -7,8 +7,8 @@ use mio::{Handler, TryRead, TryWrite};
 use std::char;
 use std::net::{TcpStream, SocketAddr};
 use std::str::FromStr;
-use tome::{handle_server_data, Session, Context, UserInterface};
-use tome::{FormattedString, Format, Color};
+use tome::{handle_server_data, Session, Context, UserInterface,
+    FormattedString, Format, Color, KEY_RESIZE};
 
 fn update_ui(ui: &mut UserInterface, sess: &Session) {
     let scroll_index = sess.scrollback_buf.index();
@@ -26,7 +26,7 @@ impl Handler for MyHandler {
     type Message = ();
 
     fn readable(&mut self,
-        event_loop: &mut mio::EventLoop<MyHandler>,
+        event_loop: &mut mio::EventLoop<Self>,
         token: mio::Token,
         _: mio::ReadHint)
     {
@@ -63,8 +63,8 @@ impl Handler for MyHandler {
         }
     }
     fn writable(&mut self,
-        _: &mut mio::EventLoop<MyHandler>,
-        token: mio::Token)
+        _: &mut mio::EventLoop<Self>,
+        _: mio::Token)
     {
         //if token == mio::Token(1) {
             let sess = self.0.get_current_session().unwrap();
@@ -72,6 +72,12 @@ impl Handler for MyHandler {
                 &format!("Connected!"), Color::Green));
             update_ui(&mut self.1, sess);
         //}
+    }
+    fn interrupted(&mut self, _: &mut mio::EventLoop<Self>) {
+        // Resize.
+        self.1.restart();
+        let sess = self.0.get_current_session().unwrap();
+        update_ui(&mut self.1, sess);
     }
 }
 
@@ -188,6 +194,13 @@ fn main() {
         true
     }));
 
+    // KEY_RESIZE
+    context.bindings.insert(KEY_RESIZE, Box::new(|_: &mut Session| {
+        // Do nothing; the resize is handled elsewhere and this
+        // key is unfortunately generated.
+        true
+    }));
+
     // Keys that should be displayed directly.
     for i in 0x20..0x71 {
         context.bindings.insert(i, Box::new(move |sess: &mut Session| {
@@ -209,32 +222,21 @@ fn main() {
     }
 
     // Initialize the UI.
-    let mut ui = UserInterface::init();
+    let ui = UserInterface::init();
 
     // Monitor the socket.
     let socket = mio::tcp::v4().unwrap();
     event_loop.register(&socket, mio::Token(1)).unwrap();
 
     // Connect to the server.
-    let (stream, result) = socket.connect(
+    let (stream, _) = socket.connect(
         &SocketAddr::from_str("66.228.38.196:8679").unwrap()).unwrap();
     context.sessions.push(Session::new(stream));
     context.session_index = Some(0);
-    {
-        let sess = context.get_current_session().unwrap();
-        if result {
-            sess.scrollback_buf.data.push(&FormattedString::with_color(
-                &format!("Connected!"), Color::Blue));
-            update_ui(&mut ui, &sess);
-        } else {
-            sess.scrollback_buf.data.push(&FormattedString::with_color(
-                &format!("Not quite connected!"), Color::Blue));
-            update_ui(&mut ui, &sess);
-        }
-    }
 
-    let _ = event_loop.run(&mut MyHandler(context, ui));
+    let mut handler = MyHandler(context, ui);
+    let _ = event_loop.run(&mut handler);
 
     // Clean up.
-    UserInterface::teardown();
+    handler.1.teardown();
 }

@@ -12,6 +12,8 @@ static CYAN_ON_DEFAULT_BG: i16 = 7;
 static WHITE_ON_DEFAULT_BG: i16 = 8;
 static INPUT_LINE_COLOR_PAIR: i16 = 9;
 
+pub use self::ncurses::KEY_RESIZE;
+
 fn convert_char(ch: char, format: Format) -> ncurses::chtype {
     // Handle the fg color.
     let mut out_char = ch as ncurses::chtype;
@@ -78,7 +80,22 @@ impl UserInterface {
             input_win: input_win
         }
     }
-    pub fn teardown() {
+    pub fn restart(&mut self) {
+        // Shut it down.
+        self.teardown();
+        ncurses::refresh();
+        ncurses::clear();
+
+        // Start it up.
+        let new_ui = UserInterface::init();
+
+        // Set up the new windows.
+        self.input_win = new_ui.input_win;
+        self.output_win = new_ui.output_win;
+    }
+    pub fn teardown(&mut self) {
+        ncurses::delwin(self.input_win);
+        ncurses::delwin(self.output_win);
         ncurses::endwin();
     }
     pub fn update(&mut self,
@@ -97,8 +114,17 @@ impl UserInterface {
         ncurses::wmove(self.input_win, 0, cursor_index as i32);
         ncurses::wrefresh(self.input_win);
     }
-    /*pub fn resize(&mut self) {
-    }*/
+    pub fn resize(&mut self, ui_width: i32, ui_height: i32) {
+        ncurses::delwin(self.input_win);
+        ncurses::delwin(self.output_win);
+
+        self.output_win = ncurses::newwin(ui_height - 1, ui_width, 0, 0);
+        ncurses::scrollok(self.output_win, true);
+        ncurses::keypad(self.output_win, true); 
+        self.input_win = ncurses::newwin(1, ui_width, ui_height - 1, 0);
+        ncurses::keypad(self.input_win, true); 
+        ncurses::wbkgd(self.input_win, ncurses::COLOR_PAIR(INPUT_LINE_COLOR_PAIR));
+    }
     fn write_lines_to_window(win: &ncurses::WINDOW, lines: &[&FormattedString]) {
         for i in 0..lines.len() {
             for (ch, format) in lines[i].iter() {
