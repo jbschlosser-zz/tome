@@ -1,10 +1,5 @@
-#![feature(collections)]
-#![feature(str_char)]
-#![feature(test)]
-
 extern crate mio;
 extern crate regex;
-extern crate systemd;
 
 mod context;
 mod formatted_string;

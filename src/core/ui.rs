@@ -13,6 +13,7 @@ static WHITE_ON_DEFAULT_BG: i16 = 8;
 static INPUT_LINE_COLOR_PAIR: i16 = 9;
 
 pub use self::ncurses::KEY_RESIZE;
+pub use self::ncurses::ERR;
 
 fn convert_char(ch: char, format: Format) -> ncurses::chtype {
     // Handle the fg color.

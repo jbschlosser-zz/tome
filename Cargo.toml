@@ -4,23 +4,14 @@ version = "0.0.1"
 authors = ["Joel Schlosser"]
 
 [dependencies]
-log = "0.2"
-
-[dependencies.systemd]
-#git = "https://github.com/jmesmon/rust-systemd"
-path = "../rust-systemd"
+log = "*"
+regex = "*"
 
 [dependencies.mio]
 git = "https://github.com/carllerche/mio.git"
-#path = "../mio"
 
 [dependencies.ncurses]
 git = "https://github.com/jeaye/ncurses-rs.git"
-
-#[dependencies.rustbox]
-#git = "https://github.com/gchp/rustbox.git"
-
-[dependencies.regex]
 
 [lib]
 name = "tome"

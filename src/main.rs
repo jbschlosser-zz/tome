@@ -1,11 +1,11 @@
-#![feature(collections)]
-
 extern crate mio;
 extern crate tome;
 
 use mio::{Handler, TryRead, TryWrite};
+use mio::tcp::TcpStream;
 use std::char;
-use std::net::{TcpStream, SocketAddr};
+use std::io::Read;
+use std::net::{SocketAddr};
 use std::str::FromStr;
 use tome::{handle_server_data, Session, Context, UserInterface,
     FormattedString, Format, Color, KEY_RESIZE};
@@ -22,7 +22,7 @@ fn update_ui(ui: &mut UserInterface, sess: &Session) {
 
 struct MyHandler(Context, UserInterface);
 impl Handler for MyHandler {
-    type Timeout = mio::NonBlock<TcpStream>;
+    type Timeout = mio::tcp::TcpStream;
     type Message = ();
 
     fn readable(&mut self,
@@ -31,7 +31,53 @@ impl Handler for MyHandler {
         _: mio::ReadHint)
     {
         if token == mio::Token(0) {
+            let mut stdin = std::io::stdin();
+            let mut buf = [0; 4096];
+            let result = stdin.read(&mut buf);
+            match result {
+                Ok(num) => {
+                    if num > 0 {
+                        let sess = self.0.get_current_session().unwrap();
+                        let mut full_num = num;
+                        if buf[0] == 27 && num == 1 {
+                            // Hack to deal with the case where the whole sequence
+                            // isn't read in with the first read.
+                            let mut buf2 = [0; 4096];
+                            match stdin.read(&mut buf2) {
+                                Ok(num2) => {
+                                    for byte in &buf2[0..num2] {
+                                        buf[full_num] = *byte;
+                                        full_num += 1;
+                                    }
+                                },
+                                Err(_) => ()
+                            }
+                        }
+                        sess.scrollback_buf.data.push(&FormattedString::with_color(
+                            &format!("Read: {:?}\n", &buf[0..full_num]), Color::Magenta));
+                        update_ui(&mut self.1, sess);
+                        return;
+                    }
+                },
+                Err(_) => ()
+            }
             let key = self.1.check_for_event();
+            if key == 27 {
+                let mut key_seq = Vec::new();
+                key_seq.push(key);
+                let mut next = self.1.check_for_event();
+                while next != (b'D' as i32) && next != (b'~' as i32) &&
+                    next != (b'C' as i32)
+                {
+                    key_seq.push(next);
+                    next = self.1.check_for_event();
+                }
+                key_seq.push(next);
+                let sess = self.0.get_current_session().unwrap();
+                sess.scrollback_buf.data.push(&FormattedString::with_color(
+                    &format!("Key sequence: {:?}\n", key_seq), Color::Magenta));
+                update_ui(&mut self.1, sess);
+            }
             match self.0.do_binding(key) {
                 Some(keep_going) => {
                     if keep_going {
@@ -62,17 +108,6 @@ impl Handler for MyHandler {
             }
         }
     }
-    fn writable(&mut self,
-        _: &mut mio::EventLoop<Self>,
-        _: mio::Token)
-    {
-        //if token == mio::Token(1) {
-            let sess = self.0.get_current_session().unwrap();
-            sess.scrollback_buf.data.push(&FormattedString::with_color(
-                &format!("Connected!"), Color::Green));
-            update_ui(&mut self.1, sess);
-        //}
-    }
     fn interrupted(&mut self, _: &mut mio::EventLoop<Self>) {
         // Resize.
         self.1.restart();
@@ -86,7 +121,7 @@ fn main() {
     let mut event_loop = mio::EventLoop::new().unwrap();
 
     // Monitor stdin.
-    let stdin = mio::Io::new(0);
+    let stdin = mio::Io::from_raw_fd(0);
     event_loop.register(&stdin, mio::Token(0)).unwrap();
 
     // Set up the context.
@@ -134,7 +169,8 @@ fn main() {
     // Enter
     context.bindings.insert(10, Box::new(|sess: &mut Session| {
         // Send the input to the server.
-        let mut send_data = String::from_str(sess.history.data.get_line(
+        let mut send_data = String::new();
+        send_data.push_str(sess.history.data.get_line(
             sess.history.index()).to_str());
         send_data.push_str("\r\n");
         sess.connection.write_slice(send_data.as_bytes()); // TODO: Check result.
@@ -224,13 +260,10 @@ fn main() {
     // Initialize the UI.
     let ui = UserInterface::init();
 
-    // Monitor the socket.
-    let socket = mio::tcp::v4().unwrap();
-    event_loop.register(&socket, mio::Token(1)).unwrap();
-
     // Connect to the server.
-    let (stream, _) = socket.connect(
+    let stream = TcpStream::connect(
         &SocketAddr::from_str("66.228.38.196:8679").unwrap()).unwrap();
+    event_loop.register(&stream, mio::Token(1)).unwrap();
     context.sessions.push(Session::new(stream));
     context.session_index = Some(0);
 

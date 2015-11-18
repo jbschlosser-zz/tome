@@ -1,7 +1,6 @@
 use formatted_string::{FormattedString, Style, Color};
 use regex::Regex;
 use session::Session;
-use systemd::journal;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ParseState {
@@ -27,27 +26,18 @@ pub fn handle_server_data(data: &[u8], session: &mut Session) -> FormattedString
                     },
                     ParseState::InProgress(_) => (),
                     ParseState::Success(ref seq) => {
-                        //journal::print(1,
-                        //    &format!("Esc sequence found: {:?}", seq));
                         handle_esc_seq(&seq, session);
                     },
-                    ParseState::Error(ref bad_seq) => {
-                        journal::print(1,
-                            &format!("Bad esc sequence found: {:?}", bad_seq));
-                    }
+                    // TODO: Log the error.
+                    ParseState::Error(ref bad_seq) => {}
                 }
                 session.esc_seq_state = new_esc_seq_state;
             },
             ParseState::InProgress(_) => (),
             ParseState::Success(ref cmd) => {
-                journal::print(1,
-                    &format!("Telnet command found: {:?}", cmd));
                 handle_telnet_cmd(&cmd, session);
             },
-            ParseState::Error(ref bad_cmd) => {
-                journal::print(1,
-                    &format!("Bad telnet command found: {:?}", bad_cmd));
-            }
+            ParseState::Error(ref bad_cmd) => {}
         }
         session.telnet_state = new_telnet_state;
     }
@@ -146,18 +136,15 @@ pub const ESC_SEQUENCE_MAX_SIZE: usize = 15;
 
 pub fn handle_esc_seq(seq: &[u8], session: &mut Session) {
     // Use the esc sequence to update the char format for the session.
-    let format = interpret_esc_seq(seq);
-    match format.0 {
-        Some(style) => session.char_format.style = style,
-        None => ()
+    let (style, fg_color, bg_color) = interpret_esc_seq(seq);
+    if let Some(s) = style {
+        session.char_format.style = s;
     }
-    match format.1 {
-        Some(fg_color) => session.char_format.fg_color = fg_color,
-        None => ()
+    if let Some(f) = fg_color {
+        session.char_format.fg_color = f;
     }
-    match format.2 {
-        Some(bg_color) => session.char_format.bg_color = bg_color,
-        None => ()
+    if let Some(b) = bg_color {
+        session.char_format.bg_color = b;
     }
 }
 

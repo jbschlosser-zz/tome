@@ -47,7 +47,9 @@ impl FormattedString {
         FormattedString { chars: String::new(), formats: Vec::new() }
     }
     pub fn with_format(chars: &str, format: Format) -> FormattedString {
-        FormattedString { chars: String::from_str(chars),
+        let mut string = String::new();
+        string.push_str(chars);
+        FormattedString { chars: string,
             formats: vec![format; chars.len()]}
     }
     pub fn with_color(chars: &str, color: Color) -> FormattedString {
@@ -107,7 +109,7 @@ impl<'a> Iterator for FormattedStringIterator<'a> {
     fn next(&mut self) -> Option<(char, Format)> {
         if self.curr < self.string.len() {
             self.curr += 1;
-            Some((self.string.chars.char_at(self.curr - 1),
+            Some((self.string.chars.chars().nth(self.curr - 1).unwrap(),
                 self.string.formats[self.curr - 1]))
         } else { None }
     }
