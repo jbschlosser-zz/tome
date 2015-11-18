@@ -86,6 +86,9 @@ impl LineBuffer {
         }
         lines_rev
     }
+    pub fn scrollback(&self, scroll: usize) -> ScrollbackIterator {
+        ScrollbackIterator::new(self, scroll)
+    }
     pub fn move_to_next_line(&mut self) {
         match self.max_lines {
             Some(s) if self.lines.len() == s => {
@@ -97,5 +100,38 @@ impl LineBuffer {
                 self.line_index += 1;
             }
         }
+    }
+}
+
+pub struct ScrollbackIterator<'a> {
+    buffer: &'a LineBuffer,
+    curr: usize
+}
+
+impl<'a> ScrollbackIterator<'a> {
+    pub fn new(buffer: &'a LineBuffer, scrollback: usize) -> ScrollbackIterator {
+        ScrollbackIterator {
+            buffer: buffer,
+            // Verify that scrollback is in range.
+            curr: if scrollback < buffer.len() {scrollback + 1} else {0}
+        }
+    }
+}
+
+impl<'a> Iterator for ScrollbackIterator<'a> {
+    type Item = &'a FormattedString;
+
+    fn next(&mut self) -> Option<&'a FormattedString> {
+        if self.curr > 0 {
+            self.curr -= 1;
+
+            // Do the math for wrapping around the circular buffer.
+            if self.curr <= self.buffer.line_index {
+                Some(&self.buffer.lines[self.buffer.line_index - self.curr])
+            } else {
+                Some(&self.buffer.lines[
+                    self.buffer.line_index + self.buffer.len() - self.curr])
+            }
+        } else { None }
     }
 }
