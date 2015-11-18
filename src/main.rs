@@ -1,10 +1,10 @@
 extern crate mio;
 extern crate tome;
 
-use mio::{Handler, TryRead, TryWrite};
+use mio::Handler;
 use mio::tcp::TcpStream;
 use std::char;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::{SocketAddr};
 use std::str::FromStr;
 use tome::{handle_server_data, Session, Context, UserInterface,
@@ -25,19 +25,21 @@ impl Handler for MyHandler {
     type Timeout = mio::tcp::TcpStream;
     type Message = ();
 
-    fn readable(&mut self,
+    fn ready(&mut self,
         event_loop: &mut mio::EventLoop<Self>,
         token: mio::Token,
-        _: mio::ReadHint)
+        _: mio::EventSet)
     {
         if token == mio::Token(0) {
             let mut stdin = std::io::stdin();
             let mut buf = [0; 4096];
-            let result = stdin.read(&mut buf);
+            /*let result = stdin.read(&mut buf);
             match result {
                 Ok(num) => {
+                    self.0.get_current_session().unwrap().scrollback_buf.data.push(&FormattedString::with_color(
+                        &format!("Input received! {}", num), Color::Magenta));
+                    update_ui(&mut self.1, self.0.get_current_session().unwrap());
                     if num > 0 {
-                        let sess = self.0.get_current_session().unwrap();
                         let mut full_num = num;
                         if buf[0] == 27 && num == 1 {
                             // Hack to deal with the case where the whole sequence
@@ -53,14 +55,14 @@ impl Handler for MyHandler {
                                 Err(_) => ()
                             }
                         }
-                        sess.scrollback_buf.data.push(&FormattedString::with_color(
+                        /*sess.scrollback_buf.data.push(&FormattedString::with_color(
                             &format!("Read: {:?}\n", &buf[0..full_num]), Color::Magenta));
                         update_ui(&mut self.1, sess);
-                        return;
+                        return;*/
                     }
                 },
                 Err(_) => ()
-            }
+            }*/
             let key = self.1.check_for_event();
             if key == 27 {
                 let mut key_seq = Vec::new();
@@ -96,14 +98,16 @@ impl Handler for MyHandler {
         } else if token == mio::Token(1) {
             let mut buffer = [0; 4096];
             let sess = self.0.get_current_session().unwrap();
-            match sess.connection.read_slice(&mut buffer) {
-                Ok(Some(a)) =>  {
+            sess.scrollback_buf.data.push(&FormattedString::with_color(
+                &format!("Data received!\n"), Color::Red));
+            update_ui(&mut self.1, sess);
+            match sess.connection.read(&mut buffer) {
+                Ok(a) =>  {
                     let chars = handle_server_data(&buffer[0..a], sess);
                     sess.scrollback_buf.data.push(&chars);
 
                     update_ui(&mut self.1, sess);
                 },
-                Ok(None) => (),
                 Err(_) => panic!("Error when reading from socket")
             }
         }
@@ -122,7 +126,8 @@ fn main() {
 
     // Monitor stdin.
     let stdin = mio::Io::from_raw_fd(0);
-    event_loop.register(&stdin, mio::Token(0)).unwrap();
+    event_loop.register(&stdin, mio::Token(0), mio::EventSet::readable(),
+        mio::PollOpt::empty()).unwrap();
 
     // Set up the context.
     let mut context = Context::new();
@@ -173,7 +178,7 @@ fn main() {
         send_data.push_str(sess.history.data.get_line(
             sess.history.index()).to_str());
         send_data.push_str("\r\n");
-        sess.connection.write_slice(send_data.as_bytes()); // TODO: Check result.
+        sess.connection.write(send_data.as_bytes()); // TODO: Check result.
 
         // Add the input to the scrollback buffer.
         sess.scrollback_buf.data.push(
@@ -263,7 +268,8 @@ fn main() {
     // Connect to the server.
     let stream = TcpStream::connect(
         &SocketAddr::from_str("66.228.38.196:8679").unwrap()).unwrap();
-    event_loop.register(&stream, mio::Token(1)).unwrap();
+    event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
+        mio::PollOpt::empty()).unwrap();
     context.sessions.push(Session::new(stream));
     context.session_index = Some(0);
 
