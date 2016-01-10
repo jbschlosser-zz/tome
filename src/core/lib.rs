@@ -4,6 +4,7 @@ extern crate mio;
 extern crate regex;
 extern crate term;
 
+pub mod actions;
 mod context;
 pub mod formatted_string;
 mod keys;

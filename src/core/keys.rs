@@ -20,8 +20,10 @@ lazy_static! {
 
 pub fn get_key_codes_to_names() -> HashMap<Vec<u8>, String> {
     let mut key_codes_to_names = HashMap::new();
-    let info = TermInfo::from_env()
-        .expect("Could not load terminfo for current environment");
+    let info = match TermInfo::from_env() {
+        Ok(i) => i,
+        Err(_) => return key_codes_to_names
+    };
     for (name, val) in info.strings {
         if name.starts_with("k") {
             let new_name = if name.starts_with("key_") {

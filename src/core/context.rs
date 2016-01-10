@@ -1,4 +1,7 @@
+use actions;
+use keys::get_key_codes_to_names;
 use session::Session;
+use std::char;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -12,9 +15,20 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     pub fn new() -> Context<'a> {
-        Context {sessions: Vec::new(), session_index: 0,
-            bindings: HashMap::new(), key_codes_to_names: HashMap::new(),
-            key_names_to_codes: HashMap::new()}
+        let key_codes_to_names = get_key_codes_to_names();
+        let mut key_names_to_codes = HashMap::new();
+        for (code, name) in key_codes_to_names.iter() {
+            key_names_to_codes.insert(name.clone(), code.clone());
+        }
+        let mut context = Context {
+            sessions: Vec::new(),
+            session_index: 0,
+            bindings: HashMap::new(),
+            key_codes_to_names: key_codes_to_names,
+            key_names_to_codes: key_names_to_codes
+        };
+        context.set_default_bindings();
+        context
     }
     pub fn current_session(&mut self) -> &mut Session {
         &mut self.sessions[self.session_index]
@@ -39,5 +53,30 @@ impl<'a> Context<'a> {
         keycode: Vec<u8>, func: F)
     {
         self.bindings.insert(keycode, Rc::new(Box::new(func)));
+    }
+    fn set_default_bindings(&mut self) {
+        self.bind_key("F12", actions::quit);
+        self.bind_key("PAGEUP", actions::prev_page);
+        self.bind_key("PAGEDOWN", actions::next_page);
+        self.bind_key("BACKSPACE", actions::backspace_input);
+        self.bind_key("DELETE", actions::delete_input_char);
+        self.bind_key("ENTER", actions::send_input);
+        self.bind_keycode(vec![13], actions::send_input);
+        self.bind_key("LEFT", actions::cursor_left);
+        self.bind_key("RIGHT", actions::cursor_right);
+        self.bind_key("UP", actions::cursor_up);
+        self.bind_key("DOWN", actions::cursor_down);
+        // Ctrl-U.
+        self.bind_keycode(vec![21], actions::delete_to_cursor);
+
+        // Keys that should be displayed directly.
+        for i in 0x20u8..0x7Fu8 {
+            let name = (i as char).to_string();
+            self.bind_key(&name, move |context: &mut Context| {
+                let ch = char::from_u32(i as u32).unwrap();
+                actions::insert_input_char(context, ch);
+                true
+            });
+        }
     }
 }
