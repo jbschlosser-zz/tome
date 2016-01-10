@@ -99,19 +99,21 @@ impl UserInterface {
         ncurses::delwin(self.output_win);
         ncurses::endwin();
     }
-    pub fn update(&mut self,
-        output_lines: &[&FormattedString],
-        input_line: &[&FormattedString],
+    pub fn update<'a, I: Iterator<Item=&'a FormattedString>>(&mut self,
+        output_lines: I,
+        input_line: I,
         cursor_index: usize)
     {
         // Write the output buffer.
         ncurses::werase(self.output_win);
-        UserInterface::write_lines_to_window(&self.output_win, output_lines);
+        UserInterface::write_lines_to_window(
+            &self.output_win, output_lines.take(self.output_win_height()));
         ncurses::wrefresh(self.output_win);
 
         // Write the input line.
         ncurses::werase(self.input_win);
-        UserInterface::write_lines_to_window(&self.input_win, input_line);
+        UserInterface::write_lines_to_window(
+            &self.input_win, input_line.take(1));
         ncurses::wmove(self.input_win, 0, cursor_index as i32);
         ncurses::wrefresh(self.input_win);
     }
@@ -126,27 +128,39 @@ impl UserInterface {
         ncurses::keypad(self.input_win, true); 
         ncurses::wbkgd(self.input_win, ncurses::COLOR_PAIR(INPUT_LINE_COLOR_PAIR));
     }
-    fn write_lines_to_window(win: &ncurses::WINDOW, lines: &[&FormattedString]) {
-        for i in 0..lines.len() {
-            for (ch, format) in lines[i].iter() {
+    fn write_lines_to_window<'a, I: Iterator<Item=&'a FormattedString>>(
+        win: &ncurses::WINDOW, lines: I)
+    {
+        for (i, line) in lines.enumerate() {
+            if i > 0 {
+                ncurses::waddch(*win, 0xA);
+            }
+            for (ch, format) in line.iter() {
                 ncurses::waddch(*win, convert_char(ch, format));
             }
-            if i != lines.len() - 1 { ncurses::waddch(*win, 0xA); }
         }
     }
     pub fn check_for_event(&self) -> i32 {
         ncurses::wgetch(self.input_win)
     }
-    pub fn width() -> usize {
+    pub fn width() -> usize { Self::win_width(ncurses::stdscr) }
+    pub fn height() -> usize { Self::win_height(ncurses::stdscr) }
+    pub fn output_win_width(&self) -> usize {
+        Self::win_width(self.output_win)
+    }
+    pub fn output_win_height(&self) -> usize {
+        Self::win_height(self.output_win)
+    }
+    fn win_width(win: ncurses::WINDOW) -> usize {
         let mut x = 0;
         let mut y = 0;
-        ncurses::getmaxyx(ncurses::stdscr, &mut y, &mut x);
+        ncurses::getmaxyx(win, &mut y, &mut x);
         return x as usize;
     }
-    pub fn height() -> usize {
+    fn win_height(win: ncurses::WINDOW) -> usize {
         let mut x = 0;
         let mut y = 0;
-        ncurses::getmaxyx(ncurses::stdscr, &mut y, &mut x);
+        ncurses::getmaxyx(win, &mut y, &mut x);
         return y as usize;
     }
 }

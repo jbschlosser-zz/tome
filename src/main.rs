@@ -13,10 +13,11 @@ use tome::{handle_server_data, Session, Context, UserInterface,
 fn update_ui(ui: &mut UserInterface, sess: &Session) {
     let scroll_index = sess.scrollback_buf.index();
     let history_index = sess.history.index();
-    let ui_height = UserInterface::height();
+    let output_win_height = ui.output_win_height();
     ui.update(
-        &sess.scrollback_buf.data.get_lines(scroll_index, ui_height),
-        &sess.history.data.get_lines(history_index, 1),
+        sess.scrollback_buf.data.
+            scrollback(scroll_index + output_win_height - 1),
+        sess.history.data.scrollback(history_index),
         sess.cursor_index);
 }
 

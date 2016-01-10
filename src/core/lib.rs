@@ -13,6 +13,3 @@ pub use line_buffer::*;
 pub use server_data::*;
 pub use session::*;
 pub use ui::*;
-
-#[cfg(test)]
-mod tests;

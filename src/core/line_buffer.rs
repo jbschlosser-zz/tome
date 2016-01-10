@@ -1,3 +1,6 @@
+use std::cmp;
+use std::slice::{Iter, IterMut};
+use std::iter::Chain;
 use std::vec::Vec;
 use formatted_string::{FormattedString, Format};
 
@@ -10,11 +13,11 @@ pub struct LineBuffer {
 }
 
 impl LineBuffer {
-    pub fn new(max_lines: Option<usize>, max_line_length: Option<usize>) -> LineBuffer {
-        let mut lines = Vec::new();
-        lines.push(FormattedString::new());
+    pub fn new(max_lines: Option<usize>, max_line_length: Option<usize>)
+        -> Self
+    {
         LineBuffer {
-            lines: lines,
+            lines: vec![FormattedString::new()],
             max_lines: max_lines,
             max_line_length: max_line_length,
             line_index: 0
@@ -65,7 +68,9 @@ impl LineBuffer {
             &mut self.lines[curr + len - sb]
         }
     }
-    pub fn get_lines(&self, scrollback: usize, max_lines: usize) -> Vec<&FormattedString> {
+    pub fn get_lines(&self, scrollback: usize, max_lines: usize)
+        -> Vec<&FormattedString>
+    {
         if scrollback >= self.lines.len() { return Vec::new() };
         let starting_index =
             if scrollback <= self.line_index
@@ -86,8 +91,52 @@ impl LineBuffer {
         }
         lines_rev
     }
-    pub fn scrollback(&self, scroll: usize) -> ScrollbackIterator {
-        ScrollbackIterator::new(self, scroll)
+    pub fn iter<'a>(&'a self, start_line: usize) ->
+        Chain<Iter<'a, FormattedString>, Iter<'a, FormattedString>>
+    {
+        let (second, first) = self.lines.split_at(self.line_index + 1);
+		let first_skip = cmp::min(start_line, first.len());
+		let second_skip =
+            if start_line > first.len() {
+                cmp::min(start_line - first.len(), second.len())
+            } else { 0 };
+        (&first[first_skip..]).iter().chain((&second[second_skip..]).iter())
+    }
+    pub fn iter_mut<'a>(&'a mut self, start_line: usize) ->
+        Chain<IterMut<'a, FormattedString>, IterMut<'a, FormattedString>>
+    {
+        let (second, first) = self.lines.split_at_mut(self.line_index + 1);
+		let first_skip = cmp::min(start_line, first.len());
+		let second_skip =
+            if start_line > first.len() {
+                cmp::min(start_line - first.len(), second.len())
+            } else { 0 };
+        (&mut first[first_skip..]).iter_mut()
+            .chain((&mut second[second_skip..]).iter_mut())
+    }
+    pub fn scrollback<'a>(&'a self, scroll: usize) ->
+        Chain<Iter<'a, FormattedString>, Iter<'a, FormattedString>>
+    {
+        let start_line =
+            if scroll >= self.len() {
+                // Scrolled back too far- stop at the beginning.
+                0
+            } else {
+                self.len() - scroll - 1
+            };
+        self.iter(start_line)
+    }
+    pub fn scrollback_mut<'a>(&'a mut self, scroll: usize) ->
+        Chain<IterMut<'a, FormattedString>, IterMut<'a, FormattedString>>
+    {
+        let start_line =
+            if scroll >= self.len() {
+                // Scrolled back too far- stop at the beginning.
+                0
+            } else {
+                self.len() - scroll - 1
+            };
+        self.iter_mut(start_line)
     }
     pub fn move_to_next_line(&mut self) {
         match self.max_lines {
@@ -103,35 +152,126 @@ impl LineBuffer {
     }
 }
 
-pub struct ScrollbackIterator<'a> {
-    buffer: &'a LineBuffer,
-    curr: usize
+#[test]
+fn test_line_buffer_iter_no_wrap() {
+    let mut buffer = LineBuffer::new(Some(4), None);
+    buffer.push(&FormattedString::with_format(
+        "abc\ndef\nghi\n", Format::default()));
+
+    let mut iter = buffer.iter(0);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("abc", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("def", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.iter(1);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("def", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.iter(2);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.iter(3);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.iter(4);
+    assert_eq!(iter.next(), None);
 }
 
-impl<'a> ScrollbackIterator<'a> {
-    pub fn new(buffer: &'a LineBuffer, scrollback: usize) -> ScrollbackIterator {
-        ScrollbackIterator {
-            buffer: buffer,
-            // Verify that scrollback is in range.
-            curr: if scrollback < buffer.len() {scrollback + 1} else {0}
-        }
-    }
+#[test]
+fn test_line_buffer_iter_with_wrap() {
+    // Buffer with wrapping.
+    let mut buffer = LineBuffer::new(Some(3), None);
+    buffer.push(&FormattedString::with_format(
+        "abc\ndef\nghi\njkl", Format::default()));
+
+    let mut iter = buffer.iter(0);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("def", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("jkl", Format::default()));
+    assert_eq!(iter.next(), None);
 }
 
-impl<'a> Iterator for ScrollbackIterator<'a> {
-    type Item = &'a FormattedString;
+#[test]
+fn test_line_buffer_scrollback_no_wrap() {
+    let mut buffer = LineBuffer::new(Some(4), None);
+    buffer.push(&FormattedString::with_format(
+        "abc\ndef\nghi\n", Format::default()));
 
-    fn next(&mut self) -> Option<&'a FormattedString> {
-        if self.curr > 0 {
-            self.curr -= 1;
+    let mut iter = buffer.scrollback(0);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
 
-            // Do the math for wrapping around the circular buffer.
-            if self.curr <= self.buffer.line_index {
-                Some(&self.buffer.lines[self.buffer.line_index - self.curr])
-            } else {
-                Some(&self.buffer.lines[
-                    self.buffer.line_index + self.buffer.len() - self.curr])
-            }
-        } else { None }
-    }
+    iter = buffer.scrollback(1);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.scrollback(2);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("def", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.scrollback(3);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("abc", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("def", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+
+    iter = buffer.scrollback(4);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("abc", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("def", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("", Format::default()));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn test_line_buffer_scrollback_with_wrap() {
+    // Buffer with wrapping.
+    let mut buffer = LineBuffer::new(Some(3), None);
+    buffer.push(&FormattedString::with_format(
+        "abc\ndef\nghi\njkl", Format::default()));
+
+    let mut iter = buffer.scrollback(1);
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("ghi", Format::default()));
+    assert_eq!(iter.next().unwrap(),
+        &FormattedString::with_format("jkl", Format::default()));
+    assert_eq!(iter.next(), None);
 }
