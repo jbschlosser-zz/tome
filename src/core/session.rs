@@ -1,5 +1,5 @@
 use formatted_string::{FormattedString, Format, Color, Style};
-use line_buffer::LineBuffer;
+use ring_buffer::RingBuffer;
 use server_data::ParseState;
 use mio::tcp::TcpStream;
 
@@ -36,7 +36,7 @@ impl<T: HasLength> Indexed<T> {
     }
 }
 
-impl HasLength for LineBuffer {
+impl<T> HasLength for RingBuffer<T> {
     fn len(&self) -> usize { self.len() }
 }
 
@@ -49,13 +49,17 @@ pub struct Session {
     pub telnet_state: ParseState,
     pub esc_seq_state: ParseState,
     pub char_format: Format,
-    pub history: Indexed<LineBuffer>,
+    pub history: Indexed<RingBuffer<FormattedString>>,
     pub cursor_index: usize,
-    pub scrollback_buf: Indexed<LineBuffer>
+    pub scrollback_buf: Indexed<RingBuffer<FormattedString>>
 }
 
 impl Session {
     pub fn new(connection: TcpStream) -> Session {
+        let mut history = Indexed::<_>::new(RingBuffer::new(None));
+        history.data.push(FormattedString::new());
+        let mut scrollback_buf = Indexed::<_>::new(RingBuffer::new(None));
+        scrollback_buf.data.push(FormattedString::new());
         Session {
             connection: connection,
             telnet_state: ParseState::NotInProgress,
@@ -65,9 +69,9 @@ impl Session {
                 fg_color: Color::Default,
                 bg_color: Color::Default
             },
-            history: Indexed::<_>::new(LineBuffer::new(None, None)),
+            history: history,
             cursor_index: 0,
-            scrollback_buf: Indexed::<_>::new(LineBuffer::new(None, None))
+            scrollback_buf: scrollback_buf
         }
     }
 }

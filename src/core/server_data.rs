@@ -22,7 +22,7 @@ pub fn handle_server_data(data: &[u8], session: &mut Session) -> FormattedString
                 match new_esc_seq_state {
                     ParseState::NotInProgress => {
                         // TODO: Properly convert to UTF-8.
-                        out_str.push(*byte as char, session.char_format);
+                        out_str.push((*byte as char, session.char_format));
                     },
                     ParseState::InProgress(_) => (),
                     ParseState::Success(ref seq) => {

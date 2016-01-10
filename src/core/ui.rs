@@ -135,7 +135,7 @@ impl UserInterface {
             if i > 0 {
                 ncurses::waddch(*win, 0xA);
             }
-            for (ch, format) in line.iter() {
+            for &(ch, format) in line.iter() {
                 ncurses::waddch(*win, convert_char(ch, format));
             }
         }

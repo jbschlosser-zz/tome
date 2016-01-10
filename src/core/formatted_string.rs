@@ -36,81 +36,24 @@ impl Format {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct FormattedString {
-    chars: String,
-    formats: Vec<Format>
+pub type FormattedString = Vec<(char, Format)>;
+
+pub fn with_format(s: &str, format: Format) -> FormattedString {
+    // TODO: clean this up.
+	let mut string = String::new();
+    string.push_str(s);
+    let mut fs = FormattedString::new();
+    for ch in string.chars() {
+        fs.push((ch, format));
+    }
+    fs
 }
 
-impl FormattedString {
-    pub fn new() -> FormattedString {
-        FormattedString { chars: String::new(), formats: Vec::new() }
-    }
-    pub fn with_format(chars: &str, format: Format) -> FormattedString {
-        let mut string = String::new();
-        string.push_str(chars);
-        FormattedString { chars: string,
-            formats: vec![format; chars.len()]}
-    }
-    pub fn with_color(chars: &str, color: Color) -> FormattedString {
-        FormattedString::with_format(chars, Format::with_fg(color))
-    }
-    pub fn push(&mut self, ch: char, format: Format) {
-        self.chars.push(ch);
-        self.formats.push(format);
-    }
-    pub fn insert(&mut self, index: usize, ch: char, format: Format) {
-        self.chars.insert(index, ch);
-        self.formats.insert(index, format);
-    }
-    pub fn remove(&mut self, index: usize) {
-        self.chars.remove(index);
-        self.formats.remove(index);
-    }
-    pub fn clear(&mut self) {
-        self.chars.clear();
-        self.formats.clear();
-    }
-    pub fn append(&mut self, other: &FormattedString) {
-        self.chars.reserve(other.len());
-        self.formats.reserve(other.len());
-        for (ch, format) in other.iter() {
-            self.push(ch, format);
-        }
-    }
-    pub fn change_format(&mut self, index: usize, format: Format) {
-        assert!(index < self.formats.len());
-        self.formats[index] = format;
-    }
-    pub fn len(&self) -> usize { self.chars.len() }
-    pub fn iter(&self) -> FormattedStringIterator {
-        FormattedStringIterator::new(self)
-    }
-    pub fn to_str(&self) -> &str { &self.chars }
-    // TODO: This is for testing at the moment. There's probably a better
-    // way to get this functionality.
-    pub fn formats(&self) -> &[Format] { &self.formats }
+pub fn with_color(s: &str, color: Color) -> FormattedString {
+    with_format(s, Format::with_fg(color))
 }
 
-pub struct FormattedStringIterator<'a> {
-    string: &'a FormattedString,
-    curr: usize
-}
-
-impl<'a> FormattedStringIterator<'a> {
-    pub fn new(string: &'a FormattedString) -> FormattedStringIterator {
-        FormattedStringIterator { string: string, curr: 0 }
-    }
-}
-
-impl<'a> Iterator for FormattedStringIterator<'a> {
-    type Item = (char, Format);
-
-    fn next(&mut self) -> Option<(char, Format)> {
-        if self.curr < self.string.len() {
-            self.curr += 1;
-            Some((self.string.chars.chars().nth(self.curr - 1).unwrap(),
-                self.string.formats[self.curr - 1]))
-        } else { None }
-    }
+pub fn to_string(fs: &FormattedString) -> String {
+    let string: String = fs.iter().map(|&(ch, _)| ch).collect();
+    string
 }
