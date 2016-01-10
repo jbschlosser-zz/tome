@@ -1,3 +1,5 @@
+extern crate log;
+extern crate log4rs;
 extern crate mio;
 extern crate tome;
 
@@ -123,6 +125,9 @@ impl<'a> Handler for MyHandler<'a> {
 }
 
 fn main() {
+    // Enable logging.
+    log4rs::init_file("config/log.toml", Default::default()).unwrap();
+
     // Set up event loop.
     let mut event_loop = mio::EventLoop::new().unwrap();
 

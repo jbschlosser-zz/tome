@@ -28,16 +28,20 @@ pub fn handle_server_data(data: &[u8], session: &mut Session) -> FormattedString
                     ParseState::Success(ref seq) => {
                         handle_esc_seq(&seq, session);
                     },
-                    // TODO: Log the error.
-                    ParseState::Error(ref bad_seq) => {}
+                    ParseState::Error(ref bad_seq) => {
+                        warn!("Bad escape sequence encountered: {:?}", bad_seq);
+                    }
                 }
                 session.esc_seq_state = new_esc_seq_state;
             },
             ParseState::InProgress(_) => (),
             ParseState::Success(ref cmd) => {
+                info!("Telnet command encountered: {:?}", cmd);
                 handle_telnet_cmd(&cmd, session);
             },
-            ParseState::Error(ref bad_cmd) => {}
+            ParseState::Error(ref bad_cmd) => {
+                warn!("Bad telnet command encountered: {:?}", bad_cmd);
+            }
         }
         session.telnet_state = new_telnet_state;
     }
