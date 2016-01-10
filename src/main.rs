@@ -76,7 +76,7 @@ impl Handler for MyHandler {
                     next = self.1.check_for_event();
                 }
                 key_seq.push(next);
-                let sess = self.0.get_current_session().unwrap();
+                let sess = self.0.get_current_session();
                 sess.scrollback_buf.data.push(&FormattedString::with_color(
                     &format!("Key sequence: {:?}\n", key_seq), Color::Magenta));
                 update_ui(&mut self.1, sess);
@@ -84,13 +84,13 @@ impl Handler for MyHandler {
             match self.0.do_binding(key) {
                 Some(keep_going) => {
                     if keep_going {
-                        update_ui(&mut self.1, self.0.get_current_session().unwrap());
+                        update_ui(&mut self.1, self.0.get_current_session());
                     } else {
                         event_loop.shutdown();
                     }
                 },
                 None => {
-                    let sess = self.0.get_current_session().unwrap();
+                    let sess = self.0.get_current_session();
                     sess.scrollback_buf.data.push(&FormattedString::with_color(
                         &format!("No binding found for key: {}\n", key), Color::Red));
                     update_ui(&mut self.1, sess);
@@ -98,7 +98,7 @@ impl Handler for MyHandler {
             }
         } else if token == mio::Token(1) {
             let mut buffer = [0; 4096];
-            let sess = self.0.get_current_session().unwrap();
+            let sess = self.0.get_current_session();
             sess.scrollback_buf.data.push(&FormattedString::with_color(
                 &format!("Data received!\n"), Color::Red));
             update_ui(&mut self.1, sess);
@@ -116,7 +116,7 @@ impl Handler for MyHandler {
     fn interrupted(&mut self, _: &mut mio::EventLoop<Self>) {
         // Resize.
         self.1.restart();
-        let sess = self.0.get_current_session().unwrap();
+        let sess = self.0.get_current_session();
         update_ui(&mut self.1, sess);
     }
 }
@@ -272,7 +272,7 @@ fn main() {
     event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
         mio::PollOpt::empty()).unwrap();
     context.sessions.push(Session::new(stream));
-    context.session_index = Some(0);
+    context.session_index = 0;
 
     let mut handler = MyHandler(context, ui);
     let _ = event_loop.run(&mut handler);
