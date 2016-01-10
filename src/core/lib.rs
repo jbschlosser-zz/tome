@@ -2,6 +2,7 @@
 #[macro_use] extern crate log;
 extern crate mio;
 extern crate regex;
+#[macro_use] extern crate resin;
 extern crate term;
 
 pub mod actions;
@@ -10,6 +11,7 @@ pub mod formatted_string;
 mod indexed;
 mod keys;
 mod ring_buffer;
+mod scripting;
 mod server_data;
 mod session;
 mod ui;

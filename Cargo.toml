@@ -16,6 +16,9 @@ git = "https://github.com/carllerche/mio.git"
 [dependencies.ncurses]
 git = "https://github.com/jeaye/ncurses-rs.git"
 
+[dependencies.resin]
+git = "https://github.com/jbschlosser/resin.git"
+
 [lib]
 name = "tome"
 path = "src/core/lib.rs"

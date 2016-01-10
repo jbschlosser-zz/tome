@@ -1,7 +1,7 @@
 use context::Context;
-use std::io::Write;
 use formatted_string;
 use formatted_string::{Color, Format, FormattedString};
+use std::io::Write;
 
 // Actions to be used directly for key bindings.
 pub fn quit(_: &mut Context) -> bool { false }
@@ -34,19 +34,24 @@ pub fn delete_input_char(context: &mut Context) -> bool {
 }
 pub fn send_input(context: &mut Context) -> bool {
     // Send the input to the server.
-    let send_data = {
-        let mut send_data = String::new();
-        send_data.push_str(&formatted_string::to_string(
-            context.history.data.get_recent(context.history.index())));
-        send_data.push_str("\r\n");
-        context.current_session_mut().connection.write(
-            send_data.as_bytes()); // TODO: Check result.
-        send_data
+    let mut send_data = formatted_string::to_string(
+        context.history.data.get_recent(context.history.index()));
+    send_data.push_str("\r\n");
+
+    // TEMPORARY:
+    let result = match context.interpreter.evaluate(&send_data) {
+        Ok(d) => format!("{}\n\n", d),
+        Err(e) => format!("{}\n\n", e)
     };
+
+    //context.current_session_mut().connection.write(
+    //    send_data.as_bytes()); // TODO: Check result.
 
     // Add the input to the scrollback buffer.
     write_scrollback(context,
         formatted_string::with_color(&send_data, Color::Yellow));
+    write_scrollback(context,
+        formatted_string::with_color(&result, Color::Green));
 
     // Add the input to the history.
     if context.history.index() > 0 {

@@ -2,8 +2,10 @@ use actions;
 use formatted_string::FormattedString;
 use indexed::Indexed;
 use keys::get_key_codes_to_names;
+use super::resin;
 use ring_buffer::RingBuffer;
 use session::Session;
+use scripting;
 use std::char;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -16,6 +18,7 @@ pub struct Context<'a> {
     pub key_names_to_codes: HashMap<String, Vec<u8>>,
     pub history: Indexed<RingBuffer<FormattedString>>,
     pub cursor_index: usize,
+    pub interpreter: resin::Interpreter
 }
 
 impl<'a> Context<'a> {
@@ -34,7 +37,8 @@ impl<'a> Context<'a> {
             key_codes_to_names: key_codes_to_names,
             key_names_to_codes: key_names_to_codes,
             history: history,
-            cursor_index: 0
+            cursor_index: 0,
+            interpreter: scripting::get_interpreter()
         };
         context.set_default_bindings();
         context
