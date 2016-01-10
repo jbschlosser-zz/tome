@@ -1,5 +1,8 @@
 use actions;
+use formatted_string::FormattedString;
+use indexed::Indexed;
 use keys::get_key_codes_to_names;
+use ring_buffer::RingBuffer;
 use session::Session;
 use std::char;
 use std::collections::HashMap;
@@ -10,7 +13,9 @@ pub struct Context<'a> {
     pub session_index: usize,
     pub bindings: HashMap<Vec<u8>, Rc<Box<Fn(&mut Context) -> bool + 'a>>>,
     pub key_codes_to_names: HashMap<Vec<u8>, String>,
-    pub key_names_to_codes: HashMap<String, Vec<u8>>
+    pub key_names_to_codes: HashMap<String, Vec<u8>>,
+    pub history: Indexed<RingBuffer<FormattedString>>,
+    pub cursor_index: usize,
 }
 
 impl<'a> Context<'a> {
@@ -20,17 +25,24 @@ impl<'a> Context<'a> {
         for (code, name) in key_codes_to_names.iter() {
             key_names_to_codes.insert(name.clone(), code.clone());
         }
+        let mut history = Indexed::<_>::new(RingBuffer::new(None));
+        history.data.push(FormattedString::new());
         let mut context = Context {
             sessions: Vec::new(),
             session_index: 0,
             bindings: HashMap::new(),
             key_codes_to_names: key_codes_to_names,
-            key_names_to_codes: key_names_to_codes
+            key_names_to_codes: key_names_to_codes,
+            history: history,
+            cursor_index: 0
         };
         context.set_default_bindings();
         context
     }
-    pub fn current_session(&mut self) -> &mut Session {
+    pub fn current_session(&self) -> &Session {
+        &self.sessions[self.session_index]
+    }
+    pub fn current_session_mut(&mut self) -> &mut Session {
         &mut self.sessions[self.session_index]
     }
     pub fn do_binding(&mut self, key: &Vec<u8>) -> Option<bool> {

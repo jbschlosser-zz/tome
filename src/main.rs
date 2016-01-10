@@ -11,14 +11,15 @@ use std::str::FromStr;
 use tome::{actions, handle_server_data, Session, Context, UserInterface,
     formatted_string, Color};
 
-fn update_ui(ui: &mut UserInterface, sess: &Session) {
-    let scroll_index = sess.scrollback_buf.index();
-    let history_index = sess.history.index();
+fn update_ui(ui: &mut UserInterface, context: &Context) {
+    let scroll_index = context.current_session().scrollback_buf.index();
+    let history_index = context.history.index();
     let output_win_height = ui.output_win_height();
     ui.update(
-        sess.scrollback_buf.data.most_recent(scroll_index + output_win_height),
-        sess.history.data.most_recent(history_index + 1),
-        sess.cursor_index);
+        context.current_session().scrollback_buf.data
+            .most_recent(scroll_index + output_win_height),
+        context.history.data.most_recent(history_index + 1),
+        context.cursor_index);
 }
 
 struct MainHandler<'a> {
@@ -75,8 +76,7 @@ impl<'a> Handler for MainHandler<'a> {
                 match self.context.do_binding(keycode) {
                     Some(keep_going) => {
                         if keep_going {
-                            update_ui(&mut self.ui,
-                                self.context.current_session());
+                            update_ui(&mut self.ui, &self.context);
                         } else {
                             event_loop.shutdown();
                         }
@@ -87,7 +87,7 @@ impl<'a> Handler for MainHandler<'a> {
                             formatted_string::with_color(
                                 &format!("No binding found for keycode: {:?}\n",
                                 keycode), Color::Red));
-                        update_ui(&mut self.ui, self.context.current_session());
+                        update_ui(&mut self.ui, &self.context);
                     }
                 }
             }
@@ -97,14 +97,16 @@ impl<'a> Handler for MainHandler<'a> {
                 &mut self.context,
                 formatted_string::with_color(
                     &format!("Data received!\n"), Color::Red));
-            update_ui(&mut self.ui, self.context.current_session());
-            match self.context.current_session().connection.read(&mut buffer) {
+            update_ui(&mut self.ui, &self.context);
+            match self.context.current_session_mut().
+                connection.read(&mut buffer)
+            {
                 Ok(a) =>  {
                     let string = handle_server_data(&buffer[0..a],
-                        self.context.current_session());
+                        self.context.current_session_mut());
                     actions::write_scrollback(&mut self.context, string);
 
-                    update_ui(&mut self.ui, self.context.current_session());
+                    update_ui(&mut self.ui, &self.context);
                 },
                 Err(_) => panic!("Error when reading from socket")
             }
@@ -113,8 +115,7 @@ impl<'a> Handler for MainHandler<'a> {
     fn interrupted(&mut self, _: &mut mio::EventLoop<Self>) {
         // Resize.
         self.ui.restart();
-        let sess = self.context.current_session();
-        update_ui(&mut self.ui, sess);
+        update_ui(&mut self.ui, &self.context);
     }
 }
 

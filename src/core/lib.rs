@@ -7,6 +7,7 @@ extern crate term;
 pub mod actions;
 mod context;
 pub mod formatted_string;
+mod indexed;
 mod keys;
 mod ring_buffer;
 mod server_data;
