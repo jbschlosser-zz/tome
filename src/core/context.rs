@@ -80,8 +80,8 @@ impl<'a> Context<'a> {
         self.bind_keycode(vec![13], actions::send_input);
         self.bind_key("LEFT", actions::cursor_left);
         self.bind_key("RIGHT", actions::cursor_right);
-        self.bind_key("UP", actions::cursor_up);
-        self.bind_key("DOWN", actions::cursor_down);
+        self.bind_key("UP", actions::history_prev);
+        self.bind_key("DOWN", actions::history_next);
         // Ctrl-U.
         self.bind_keycode(vec![21], actions::delete_to_cursor);
 

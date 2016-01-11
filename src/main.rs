@@ -1,8 +1,10 @@
+extern crate argparse;
 extern crate log;
 extern crate log4rs;
 extern crate mio;
 extern crate tome;
 
+use argparse::{ArgumentParser, Store};
 use mio::Handler;
 use mio::tcp::TcpStream;
 use std::io::Read;
@@ -123,6 +125,20 @@ fn main() {
     // Enable logging.
     log4rs::init_file("config/log.toml", Default::default()).unwrap();
 
+    // Parse arguments.
+    let mut host = "127.0.0.1".to_string();
+    let mut port = "4000".to_string();
+    {
+        // test: 66.228.38.196 8679
+        let mut ap = ArgumentParser::new();
+        ap.set_description("Example: tome 127.0.0.1 4000");
+        ap.refer(&mut host)
+            .add_argument("host", Store, "Server IP address");
+        ap.refer(&mut port)
+            .add_argument("port", Store, "Port number");
+        ap.parse_args_or_exit();
+    }
+
     // Set up event loop.
     let mut event_loop = mio::EventLoop::new().unwrap();
 
@@ -131,21 +147,27 @@ fn main() {
     event_loop.register(&stdin, mio::Token(0), mio::EventSet::readable(),
         mio::PollOpt::empty()).unwrap();
 
+    // Connect to the server.
+    let addr = match SocketAddr::from_str(&format!("{}:{}", &host, &port)) {
+        Ok(a) => a,
+        Err(e) => {
+            println!("Error: bad host: {}", e);
+            return;
+        }
+    };
+    let stream = TcpStream::connect(&addr).unwrap();
+    event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
+        mio::PollOpt::empty()).unwrap();
+
     // Set up the context.
     let mut context = Context::new();
+    context.sessions.push(Session::new(stream));
+    context.session_index = 0;
 
     // Initialize the UI.
     let ui = UserInterface::init();
 
-    // Connect to the server.
-    let stream = TcpStream::connect(
-        //&SocketAddr::from_str("66.228.38.196:8679").unwrap()).unwrap();
-        &SocketAddr::from_str("127.0.0.1:4000").unwrap()).unwrap();
-    event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
-        mio::PollOpt::empty()).unwrap();
-    context.sessions.push(Session::new(stream));
-    context.session_index = 0;
-
+    // Run the event loop.
     let mut handler = MainHandler::new(context, ui);
     let _ = event_loop.run(&mut handler);
 
