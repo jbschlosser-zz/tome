@@ -71,8 +71,6 @@ pub const TELNET_DONT: u8 = 254; // Indicates the demand that the other party st
 pub const TELNET_IAC: u8 = 255; // Interpret As Command. Indicates the start of a telnet option
                        // negotiation.
  
-pub const TELNET_MAX_COMMAND_SIZE: usize = 64;
-
 pub fn handle_telnet_cmd(_: &[u8], _: &mut Session) {
     // TODO: Implement this.
 }
@@ -80,57 +78,67 @@ pub fn handle_telnet_cmd(_: &[u8], _: &mut Session) {
 pub fn parse_telnet(old_state: &ParseState, byte: u8) -> ParseState {
     match *old_state {
         ParseState::NotInProgress => {
-            if byte == TELNET_IAC { ParseState::InProgress(vec![byte]) }
-            else { ParseState::NotInProgress }
+            match byte {
+                TELNET_IAC => ParseState::InProgress(vec![byte]),
+                _ => ParseState::NotInProgress
+            }
         },
         ParseState::InProgress(ref b) => {
             let mut bytes = b.clone();
             bytes.push(byte);
 
-            // Check if the command has exceeded the max allowed size.
-            if bytes.len() > TELNET_MAX_COMMAND_SIZE {
-                // Boom. Ran out of space for the command :(
-                return ParseState::Error(bytes);
-            }
-
             // Determine the next state.
-            if bytes.len() == 2 {
-                match byte {
-                    // Two byte commands.
-                    TELNET_IAC|TELNET_NOP|TELNET_DATA_MARK|TELNET_BREAK|TELNET_IP|TELNET_AO|TELNET_AYT|TELNET_EC|TELNET_EL|TELNET_GA => {
-                        return ParseState::Success(bytes);
-                    },
-                    // Three byte commands.
-                    TELNET_WILL|TELNET_WONT|TELNET_DO|TELNET_DONT|TELNET_SB => (),
-                    // Unknown command.
-                    _ => return ParseState::Error(bytes)
-                }
-            } else if bytes.len() == 3 {
-                let prev_byte = bytes[bytes.len() - 2];
-                match prev_byte {
-                    // Three byte commands.
-                    TELNET_WILL|TELNET_WONT|TELNET_DO|TELNET_DONT => {
-                        return ParseState::Success(bytes);
-                    },
-                    // Sub-negotiation can span an arbitrary number of bytes.
-                    TELNET_SB => (),
-                    // Unexpected command.
-                    _ => return ParseState::Error(bytes)
-                }
-            } else if bytes.len() > 3 {
-                // Sub-negotiation is assumed, since that is the only command
-                // that can be this long. Check if the most recent bytes are
-                // IAC,SE. This ends sub-negotiation.
-                let prev_byte = bytes[bytes.len() - 2];
-                if prev_byte == TELNET_IAC && byte == TELNET_SE {
-                    return ParseState::Success(bytes);
+            match bytes.len() {
+                1 => ParseState::InProgress(bytes),
+                2 => {
+                    match byte {
+                        // Two byte commands.
+                        TELNET_IAC | TELNET_NOP | TELNET_DATA_MARK |
+                        TELNET_BREAK | TELNET_IP | TELNET_AO | TELNET_AYT |
+                        TELNET_EC | TELNET_EL | TELNET_GA =>
+                            ParseState::Success(bytes),
+
+                        // Three byte commands.
+                        TELNET_WILL | TELNET_WONT | TELNET_DO | TELNET_DONT |
+                        TELNET_SB =>
+                            ParseState::InProgress(bytes),
+
+                        // Unknown command.
+                        _ => ParseState::Error(bytes)
+                    }
+                },
+                3 => {
+                    let prev_byte = bytes[bytes.len() - 2];
+                    match prev_byte {
+                        // Three byte commands.
+                        TELNET_WILL | TELNET_WONT | TELNET_DO | TELNET_DONT =>
+                            ParseState::Success(bytes),
+
+                        // Sub-negotiation can span an arbitrary number of
+                        // bytes.
+                        TELNET_SB => ParseState::InProgress(bytes),
+
+                        // Unexpected command.
+                        _ => ParseState::Error(bytes)
+                    }
+                },
+                _ => {
+                    // Sub-negotiation is assumed, since that is the only
+                    // command that can be this long. Check if the most recent
+                    // bytes are IAC,SE. This ends sub-negotiation.
+                    let prev_byte = bytes[bytes.len() - 2];
+                    if prev_byte == TELNET_IAC && byte == TELNET_SE {
+                        ParseState::Success(bytes)
+                    } else {
+                        ParseState::InProgress(bytes)
+                    }
                 }
             }
-
-            ParseState::InProgress(bytes)
         },
-        ParseState::Success(_) => parse_telnet(&ParseState::NotInProgress, byte),
-        ParseState::Error(_) => parse_telnet(&ParseState::NotInProgress, byte)
+        ParseState::Success(_) =>
+            parse_telnet(&ParseState::NotInProgress, byte),
+        ParseState::Error(_) =>
+            parse_telnet(&ParseState::NotInProgress, byte)
     }
 }
 
