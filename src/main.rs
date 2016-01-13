@@ -1,12 +1,15 @@
 extern crate argparse;
-extern crate log;
 extern crate log4rs;
+extern crate log;
 extern crate mio;
 extern crate tome;
+extern crate xdg;
 
 use argparse::{ArgumentParser, Store};
 use mio::Handler;
 use mio::tcp::TcpStream;
+use std::error::Error;
+use std::fs::File;
 use std::io::Read;
 use std::net::{SocketAddr};
 use std::str::FromStr;
@@ -22,6 +25,23 @@ fn update_ui(ui: &mut UserInterface, context: &Context) {
             .most_recent(scroll_index + output_win_height),
         context.history.data.most_recent(history_index + 1),
         context.cursor_index);
+}
+
+fn read_config_file(filename: &str) -> std::io::Result<String> {
+    let xdg_dirs = match xdg::BaseDirectories::with_prefix("tome") {
+        Ok(d) => d,
+        Err(e) => return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound, e.description()))
+    };
+    let config_path = match xdg_dirs.find_config_file(filename) {
+        Some(p) => p,
+        None => return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound, "Not found"))
+    };
+    let mut config_file = try!(File::open(config_path));
+    let mut config_contents = String::new();
+    try!(config_file.read_to_string(&mut config_contents));
+    Ok(config_contents)
 }
 
 struct MainHandler<'a> {
@@ -166,6 +186,21 @@ fn main() {
 
     // Initialize the UI.
     let ui = UserInterface::init();
+    
+    // Read the config file (if it exists).
+    let _ = read_config_file("tome.scm").map_err(|e| {
+        actions::write_scrollback(&mut context,
+            formatted_string::with_color(
+                &format!("Warning: failed to read config file! ({})\n", e),
+                Color::Yellow));
+    }).map(|contents: String| {
+        let _ = context.interpreter.evaluate(&contents).map_err(|e| {
+            actions::write_scrollback(&mut context,
+                formatted_string::with_color(
+                    &format!("Warning: config file error: {}\n", e),
+                    Color::Yellow));
+        });
+    });
 
     // Run the event loop.
     let mut handler = MainHandler::new(context, ui);
