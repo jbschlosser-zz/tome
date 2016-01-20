@@ -1,6 +1,6 @@
 extern crate ncurses;
 
-use formatted_string::{FormattedString, Format, Color, Style};
+use tome::{FormattedString, Format, Color, Style};
 
 static BLACK_ON_DEFAULT_BG: i16 = 1;
 static RED_ON_DEFAULT_BG: i16 = 2;
@@ -11,9 +11,6 @@ static MAGENTA_ON_DEFAULT_BG: i16 = 6;
 static CYAN_ON_DEFAULT_BG: i16 = 7;
 static WHITE_ON_DEFAULT_BG: i16 = 8;
 static INPUT_LINE_COLOR_PAIR: i16 = 9;
-
-pub use self::ncurses::KEY_RESIZE;
-pub use self::ncurses::ERR;
 
 fn convert_char(ch: char, format: Format) -> ncurses::chtype {
     // Handle the fg color.
@@ -117,17 +114,6 @@ impl UserInterface {
         ncurses::wmove(self.input_win, 0, cursor_index as i32);
         ncurses::wrefresh(self.input_win);
     }
-    pub fn resize(&mut self, ui_width: i32, ui_height: i32) {
-        ncurses::delwin(self.input_win);
-        ncurses::delwin(self.output_win);
-
-        self.output_win = ncurses::newwin(ui_height - 1, ui_width, 0, 0);
-        ncurses::scrollok(self.output_win, true);
-        ncurses::keypad(self.output_win, true); 
-        self.input_win = ncurses::newwin(1, ui_width, ui_height - 1, 0);
-        ncurses::keypad(self.input_win, true); 
-        ncurses::wbkgd(self.input_win, ncurses::COLOR_PAIR(INPUT_LINE_COLOR_PAIR));
-    }
     fn write_lines_to_window<'a, I: Iterator<Item=&'a FormattedString>>(
         win: &ncurses::WINDOW, lines: I)
     {
@@ -140,14 +126,8 @@ impl UserInterface {
             }
         }
     }
-    pub fn check_for_event(&self) -> i32 {
-        ncurses::wgetch(self.input_win)
-    }
     pub fn width() -> usize { Self::win_width(ncurses::stdscr) }
     pub fn height() -> usize { Self::win_height(ncurses::stdscr) }
-    pub fn output_win_width(&self) -> usize {
-        Self::win_width(self.output_win)
-    }
     pub fn output_win_height(&self) -> usize {
         Self::win_height(self.output_win)
     }

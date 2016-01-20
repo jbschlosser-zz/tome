@@ -1,9 +1,11 @@
 use context::Context;
-use formatted_string;
-use formatted_string::{Color, Format, FormattedString};
 use resin::Datum;
-use ring_buffer::RingBuffer;
-use std::io::Write;
+use scripting;
+use std::fs::File;
+use std::io;
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use tome::{formatted_string, Color, Format, FormattedString, RingBuffer};
 
 // Actions to be used directly for key bindings.
 pub fn quit(_: &mut Context) -> bool { false }
@@ -45,7 +47,7 @@ pub fn send_input(context: &mut Context) -> bool {
                 let expr = list!(h, Datum::String(input_line_contents.clone()));
                 match context.interpreter.evaluate_datum(&expr) {
                     Ok(d) => convert_to_string_vec(d),
-                    Err(e) => Err(e.msg)
+                    Err((e, _)) => Err(e.msg)
                 }
             },
             None => {
@@ -145,6 +147,36 @@ pub fn delete_to_cursor(context: &mut Context) -> bool {
     curr_line.extend(after_cursor);
     context.cursor_index = 0;
     true
+}
+pub fn reload_config(context: &mut Context) -> bool {
+    // Read the config file (if it exists).
+    context.interpreter = scripting::get_interpreter();
+    let _ = read_file_contents(&context.config_filepath)
+        .map_err(|e| {
+        write_scrollback(context,
+            formatted_string::with_color(
+                &format!("Warning: failed to read config file! ({})\n", e),
+                Color::Yellow));
+    }).map(|contents: String| {
+        match context.interpreter.evaluate(&contents) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("bad news");
+                write_scrollback(context,
+                    formatted_string::with_color(
+                    &format!("Warning: config file error:\n{}\n", e),
+                    Color::Yellow))
+            }
+        }
+    });
+    true
+}
+// Helper function to read a file's contents.
+fn read_file_contents(filepath: &PathBuf) -> io::Result<String> {
+    let mut file = try!(File::open(filepath));
+    let mut file_contents = String::new();
+    try!(file.read_to_string(&mut file_contents));
+    Ok(file_contents)
 }
 
 // Actions with arguments.

@@ -1,20 +1,31 @@
 extern crate argparse;
 extern crate log4rs;
-extern crate log;
+#[macro_use] extern crate log;
 extern crate mio;
+#[macro_use] extern crate resin;
 extern crate tome;
 extern crate xdg;
+
+mod actions;
+mod context;
+mod indexed;
+mod scripting;
+mod server_data;
+mod session;
+mod ui;
 
 use argparse::{ArgumentParser, Store};
 use mio::Handler;
 use mio::tcp::TcpStream;
-use std::error::Error;
-use std::fs::File;
 use std::io::Read;
 use std::net::{SocketAddr};
+use std::path::PathBuf;
 use std::str::FromStr;
-use tome::{actions, handle_server_data, Session, Context, UserInterface,
-    formatted_string, Color};
+
+use context::Context;
+use session::Session;
+use ui::UserInterface;
+use tome::{formatted_string, Color, RingBuffer};
 
 fn update_ui(ui: &mut UserInterface, context: &Context) {
     let scroll_index = context.current_session().scrollback_buf.index();
@@ -27,21 +38,16 @@ fn update_ui(ui: &mut UserInterface, context: &Context) {
         context.cursor_index);
 }
 
-fn read_config_file(filename: &str) -> std::io::Result<String> {
+// Helper function to read the config filepath.
+fn get_config_filepath() -> Result<PathBuf, String> {
     let xdg_dirs = match xdg::BaseDirectories::with_prefix("tome") {
-        Ok(d) => d,
-        Err(e) => return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound, e.description()))
+        Ok(b) => b,
+        Err(e) => return Err(format!("{}", e))
     };
-    let config_path = match xdg_dirs.find_config_file(filename) {
-        Some(p) => p,
-        None => return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound, "Not found"))
-    };
-    let mut config_file = try!(File::open(config_path));
-    let mut config_contents = String::new();
-    try!(config_file.read_to_string(&mut config_contents));
-    Ok(config_contents)
+    match xdg_dirs.find_config_file("tome.scm") {
+        Some(fp) => Ok(fp),
+        None => Err("Could not find config file".to_string())
+    }
 }
 
 struct MainHandler<'a> {
@@ -124,7 +130,7 @@ impl<'a> Handler for MainHandler<'a> {
                 connection.read(&mut buffer)
             {
                 Ok(a) =>  {
-                    let string = handle_server_data(&buffer[0..a],
+                    let string = server_data::handle_server_data(&buffer[0..a],
                         self.context.current_session_mut());
                     actions::write_scrollback(&mut self.context, string);
 
@@ -179,29 +185,25 @@ fn main() {
     event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
         mio::PollOpt::empty()).unwrap();
 
+    // Look for the config file; use a default path if something goes wrong.
+    let config_filepath = get_config_filepath()
+        .unwrap_or_else(|_| {
+            let mut pb = PathBuf::new();
+            pb.push("~/.config/tome/tome.scm");
+            pb
+        });
+
     // Set up the context.
-    let mut context = Context::new();
-    context.sessions.push(Session::new(stream));
+    let mut context = Context::new(config_filepath);
+    context.sessions.push(Session::new(stream, RingBuffer::new(None)));
     context.session_index = 0;
 
     // Initialize the UI.
     let ui = UserInterface::init();
-    
-    // Read the config file (if it exists).
-    let _ = read_config_file("tome.scm").map_err(|e| {
-        actions::write_scrollback(&mut context,
-            formatted_string::with_color(
-                &format!("Warning: failed to read config file! ({})\n", e),
-                Color::Yellow));
-    }).map(|contents: String| {
-        let _ = context.interpreter.evaluate(&contents).map_err(|e| {
-            actions::write_scrollback(&mut context,
-                formatted_string::with_color(
-                    &format!("Warning: config file error: {}\n", e),
-                    Color::Yellow));
-        });
-    });
 
+    // Load the config file.
+    actions::reload_config(&mut context);
+    
     // Run the event loop.
     let mut handler = MainHandler::new(context, ui);
     let _ = event_loop.run(&mut handler);

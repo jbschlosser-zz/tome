@@ -1,7 +1,5 @@
-use formatted_string::{FormattedString, Format, Color, Style};
 use indexed::Indexed;
-use ring_buffer::RingBuffer;
-use server_data::ParseState;
+use tome::{FormattedString, Format, Color, Style, ParseState, RingBuffer};
 use mio::tcp::TcpStream;
 
 pub struct Session {
@@ -13,9 +11,15 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(connection: TcpStream) -> Session {
-        let mut scrollback_buf = Indexed::<_>::new(RingBuffer::new(None));
-        scrollback_buf.data.push(FormattedString::new());
+    pub fn new(connection: TcpStream,
+        buffer: RingBuffer<FormattedString>) -> Session
+    {
+        let mut scrollback_buf = Indexed::<_>::new(buffer);
+        if scrollback_buf.data.len() == 0 {
+            // Ensure that a line is present so that the buffer
+            // can be indexed.
+            scrollback_buf.data.push(FormattedString::new());
+        }
         Session {
             connection: connection,
             telnet_state: ParseState::NotInProgress,

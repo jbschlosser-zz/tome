@@ -1,14 +1,13 @@
 use actions;
-use formatted_string::FormattedString;
 use indexed::Indexed;
-use keys::get_key_codes_to_names;
-use super::resin;
-use ring_buffer::RingBuffer;
-use session::Session;
 use scripting;
+use session::Session;
 use std::char;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
+use super::resin;
+use tome::{FormattedString, RingBuffer, keys};
 
 pub struct Context<'a> {
     pub sessions: Vec<Session>,
@@ -18,12 +17,13 @@ pub struct Context<'a> {
     pub key_names_to_codes: HashMap<String, Vec<u8>>,
     pub history: Indexed<RingBuffer<FormattedString>>,
     pub cursor_index: usize,
-    pub interpreter: resin::Interpreter
+    pub interpreter: resin::Interpreter,
+    pub config_filepath: PathBuf
 }
 
 impl<'a> Context<'a> {
-    pub fn new() -> Context<'a> {
-        let key_codes_to_names = get_key_codes_to_names();
+    pub fn new(config_filepath: PathBuf) -> Context<'a> {
+        let key_codes_to_names = keys::get_key_codes_to_names();
         let mut key_names_to_codes = HashMap::new();
         for (code, name) in key_codes_to_names.iter() {
             key_names_to_codes.insert(name.clone(), code.clone());
@@ -38,7 +38,8 @@ impl<'a> Context<'a> {
             key_names_to_codes: key_names_to_codes,
             history: history,
             cursor_index: 0,
-            interpreter: scripting::get_interpreter()
+            interpreter: scripting::get_interpreter(),
+            config_filepath: config_filepath
         };
         context.set_default_bindings();
         context

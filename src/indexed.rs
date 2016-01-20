@@ -1,5 +1,4 @@
-use formatted_string::FormattedString;
-use ring_buffer::RingBuffer;
+use tome::{FormattedString, RingBuffer};
 
 pub trait HasLength {
     fn len(&self) -> usize;
