@@ -1,6 +1,6 @@
 use context::Context;
-use resin::Datum;
-use scripting;
+use resin::{Datum, RuntimeError};
+use scripting::{self, ScriptAction};
 use std::fs::File;
 use std::io;
 use std::io::{Read, Write};
@@ -41,40 +41,40 @@ pub fn send_input(context: &mut Context) -> bool {
     // the contents of the input line.
     let input_line_contents = formatted_string::to_string(
         context.history.data.get_recent(context.history.index()));
-    let to_send: Result<Vec<String>, String> =
-        match context.interpreter.root().get("send-input-hook") {
-            Some(h) => {
-                let expr = list!(h, Datum::String(input_line_contents.clone()));
-                match context.interpreter.evaluate_datum(&expr) {
-                    Ok(d) => convert_to_string_vec(d),
-                    Err((e, _)) => Err(e.msg)
-                }
+    let hook = context.interpreter.root().get("send-input-hook");
+    if let Some(h) = hook {
+        // Evaluate the hook with the input.
+        let expr = list!(h, Datum::String(input_line_contents.clone()));
+        let eval_result = context.interpreter.evaluate_datum(&expr);
+        match eval_result {
+            Ok(d) => {
+                d.as_vec().0.into_iter().map(|action| {
+                    let _ = do_action(action, context).map_err(|_| {
+                        // Write the warning to the scrollback buffer.
+                        write_scrollback(context,
+                            formatted_string::with_color(
+                                &format!("Warning: non-action received from input hook\n"),
+                                Color::Yellow));
+                    });
+                }).last();
             },
-            None => {
-                Ok(vec![input_line_contents.clone()])
-            }
-        };
-
-    match to_send {
-        Ok(svec) => {
-            for s in svec {
-                // Write to the network.
-                send_data(context, &s, true);
-                
-                // Add to the scrollback buffer.
+            Err((e, trace)) => {
+                // Write the error to the scrollback buffer.
                 write_scrollback(context,
                     formatted_string::with_color(
-                        &format!("{}\n", &s),
-                        Color::Yellow));
+                        &format!("Script error: {}\n{}\n", &e.msg, &trace),
+                        Color::Red));
             }
-        },
-        Err(e) => {
-            // Write the error to the scrollback buffer.
-            write_scrollback(context,
-                formatted_string::with_color(
-                    &format!("{}\n", &e),
-                    Color::Red));
         }
+    } else {
+        // No hook exists; simply send the input.
+        send_data(context, &input_line_contents, true);
+
+        // Add to the scrollback buffer.
+        write_scrollback(context,
+            formatted_string::with_color(
+                &format!("{}\n", &input_line_contents),
+                Color::Yellow));
     }
 
     // Add the input to the history and clear the input line.
@@ -97,19 +97,32 @@ pub fn send_input(context: &mut Context) -> bool {
     context.cursor_index = 0;
     true
 }
-// Helper function to return the converted vec or an error string.
-fn convert_to_string_vec(datum: Datum) -> Result<Vec<String>, String> {
-    let mut svec = Vec::new();
-    let (dvec, _) = datum.as_vec();
-    for d in dvec {
-        if let Datum::String(s) = d {
-            svec.push(s);
-        } else {
-            return Err("Expected a string or list of strings from the input line hook"
-                .to_string())
-        }
+// Helper function to run a script action.
+fn do_action(action: Datum, context: &mut Context) -> Result<(), RuntimeError> {
+    match action {
+        d @ Datum::Ext(..) => {
+            let action = try_unwrap_arg!(d => ScriptAction);
+            match action {
+                &ScriptAction::ReloadConfig => {
+                    reload_config(context);
+                },
+                &ScriptAction::WriteScrollback(ref fs) => {
+                    write_scrollback(context, fs.clone());
+                }
+                &ScriptAction::SendInput(ref s) => {
+                    send_data(context, &s, true);
+
+                    // Add to the scrollback buffer.
+                    write_scrollback(context,
+                        formatted_string::with_color(
+                            &format!("{}\n", &s),
+                            Color::Yellow));
+                }
+            }
+            Ok(())
+        },
+        _ => runtime_error!("Non-action returned from the input hook")
     }
-    Ok(svec)
 }
 pub fn cursor_left(context: &mut Context) -> bool {
     let cursor = context.cursor_index;
@@ -150,25 +163,23 @@ pub fn delete_to_cursor(context: &mut Context) -> bool {
 }
 pub fn reload_config(context: &mut Context) -> bool {
     // Read the config file (if it exists).
-    context.interpreter = scripting::get_interpreter();
-    let _ = read_file_contents(&context.config_filepath)
-        .map_err(|e| {
-        write_scrollback(context,
-            formatted_string::with_color(
-                &format!("Warning: failed to read config file! ({})\n", e),
-                Color::Yellow));
-    }).map(|contents: String| {
-        match context.interpreter.evaluate(&contents) {
-            Ok(_) => (),
-            Err(e) => {
-                println!("bad news");
+    context.interpreter = scripting::init_interpreter();
+    match read_file_contents(&context.config_filepath) {
+        Ok(contents) => {
+            if let Err(e) = context.interpreter.evaluate(&contents) {
                 write_scrollback(context,
                     formatted_string::with_color(
                     &format!("Warning: config file error:\n{}\n", e),
-                    Color::Yellow))
+                    Color::Yellow));
             }
+        },
+        Err(e) => {
+            write_scrollback(context,
+                formatted_string::with_color(
+                    &format!("Warning: failed to read config file! ({})\n", e),
+                    Color::Yellow));
         }
-    });
+    }
     true
 }
 // Helper function to read a file's contents.

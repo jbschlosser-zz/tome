@@ -9,7 +9,7 @@ lazy_static! {
         m.insert("CUB1".to_string(), "LEFT".to_string());
         m.insert("CUD1".to_string(), "DOWN".to_string());
         m.insert("CUF1".to_string(), "RIGHT".to_string());
-        m.insert("BS".to_string(), "BACKSPACE".to_string());
+        m.insert("BS".to_string(), "CTRL_H".to_string());
         m.insert("NP".to_string(), "PAGEDOWN".to_string());
         m.insert("PP".to_string(), "PAGEUP".to_string());
         m.insert("CBT".to_string(), "BACKTAB".to_string());
@@ -38,6 +38,9 @@ pub fn get_key_codes_to_names() -> HashMap<Vec<u8>, String> {
                 });
         }
     }
+
+    // Backspace (0x7F) hack.
+    key_codes_to_names.insert(vec![0x7F], "BACKSPACE".to_string());
 
     for i in 0x20..0x7F {
         let name = (i as char).to_string();

@@ -1,11 +1,11 @@
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 pub enum Style {
     Normal,
     Bold,
     Standout
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 pub enum Color {
     Default,
     Black,
@@ -18,7 +18,7 @@ pub enum Color {
     White
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 pub struct Format {
     pub style: Style,
     pub fg_color: Color,

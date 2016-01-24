@@ -1,18 +1,18 @@
 use actions;
 use indexed::Indexed;
-use scripting;
 use session::Session;
 use std::char;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use super::resin;
+use super::resin::Interpreter;
 use tome::{FormattedString, RingBuffer, keys};
 
-pub struct Context<'a> {
+pub struct Context {
     pub sessions: Vec<Session>,
     pub session_index: usize,
-    pub bindings: HashMap<Vec<u8>, Rc<Box<Fn(&mut Context) -> bool + 'a>>>,
+    pub bindings: HashMap<Vec<u8>, Rc<Box<Fn(&mut Context) -> bool>>>,
     pub key_codes_to_names: HashMap<Vec<u8>, String>,
     pub key_names_to_codes: HashMap<String, Vec<u8>>,
     pub history: Indexed<RingBuffer<FormattedString>>,
@@ -21,8 +21,8 @@ pub struct Context<'a> {
     pub config_filepath: PathBuf
 }
 
-impl<'a> Context<'a> {
-    pub fn new(config_filepath: PathBuf) -> Context<'a> {
+impl Context {
+    pub fn new(config_filepath: PathBuf) -> Context {
         let key_codes_to_names = keys::get_key_codes_to_names();
         let mut key_names_to_codes = HashMap::new();
         for (code, name) in key_codes_to_names.iter() {
@@ -38,7 +38,7 @@ impl<'a> Context<'a> {
             key_names_to_codes: key_names_to_codes,
             history: history,
             cursor_index: 0,
-            interpreter: scripting::get_interpreter(),
+            interpreter: Interpreter::new(),
             config_filepath: config_filepath
         };
         context.set_default_bindings();
@@ -57,7 +57,7 @@ impl<'a> Context<'a> {
         };
         Some(binding(self))
     }
-    pub fn bind_key<F: Fn(&mut Context) -> bool + 'a>(&mut self,
+    pub fn bind_key<F: Fn(&mut Context) -> bool + 'static>(&mut self,
         key_name: &str, func: F)
     {
         let code = match self.key_names_to_codes.get(key_name) {
@@ -66,7 +66,7 @@ impl<'a> Context<'a> {
         };
         self.bind_keycode(code, func)
     }
-    pub fn bind_keycode<F: Fn(&mut Context) -> bool + 'a>(&mut self,
+    pub fn bind_keycode<F: Fn(&mut Context) -> bool + 'static>(&mut self,
         keycode: Vec<u8>, func: F)
     {
         self.bindings.insert(keycode, Rc::new(Box::new(func)));
@@ -78,7 +78,7 @@ impl<'a> Context<'a> {
         self.bind_key("BACKSPACE", actions::backspace_input);
         self.bind_key("DELETE", actions::delete_input_char);
         self.bind_key("ENTER", actions::send_input);
-        self.bind_keycode(vec![13], actions::send_input);
+        self.bind_keycode(vec![13], actions::send_input); // LF
         self.bind_key("LEFT", actions::cursor_left);
         self.bind_key("RIGHT", actions::cursor_right);
         self.bind_key("UP", actions::history_prev);

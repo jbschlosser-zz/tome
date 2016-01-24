@@ -50,18 +50,18 @@ fn get_config_filepath() -> Result<PathBuf, String> {
     }
 }
 
-struct MainHandler<'a> {
-    context: Context<'a>,
+struct MainHandler {
+    context: Context,
     ui: UserInterface
 }
 
-impl<'a> MainHandler<'a> {
-    pub fn new(context: Context<'a>, ui: UserInterface) -> Self {
+impl MainHandler {
+    pub fn new(context: Context, ui: UserInterface) -> Self {
         MainHandler {context: context, ui: ui}
     }
 }
 
-impl<'a> Handler for MainHandler<'a> {
+impl Handler for MainHandler {
     type Timeout = mio::tcp::TcpStream;
     type Message = ();
 
@@ -101,9 +101,10 @@ impl<'a> Handler for MainHandler<'a> {
 
             // Do the bindings.
             for keycode in keys_pressed.iter() {
-                match self.context.do_binding(keycode) {
-                    Some(keep_going) => {
-                        if keep_going {
+                let keep_going = self.context.do_binding(keycode);
+                match keep_going {
+                    Some(kp) => {
+                        if kp {
                             update_ui(&mut self.ui, &self.context);
                         } else {
                             event_loop.shutdown();
@@ -126,13 +127,14 @@ impl<'a> Handler for MainHandler<'a> {
                 formatted_string::with_color(
                     &format!("Data received!\n"), Color::Red));
             update_ui(&mut self.ui, &self.context);
-            match self.context.current_session_mut().
-                connection.read(&mut buffer)
-            {
+            let bytes_read = self.context.current_session_mut().
+                connection.read(&mut buffer);
+            match bytes_read {
                 Ok(a) =>  {
                     let string = server_data::handle_server_data(&buffer[0..a],
                         self.context.current_session_mut());
-                    actions::write_scrollback(&mut self.context, string);
+                    actions::write_scrollback(
+                        &mut self.context, string);
 
                     update_ui(&mut self.ui, &self.context);
                 },
@@ -196,7 +198,6 @@ fn main() {
     // Set up the context.
     let mut context = Context::new(config_filepath);
     context.sessions.push(Session::new(stream, RingBuffer::new(None)));
-    context.session_index = 0;
 
     // Initialize the UI.
     let ui = UserInterface::init();
