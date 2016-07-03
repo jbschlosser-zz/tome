@@ -1,12 +1,11 @@
 use actions;
 use indexed::Indexed;
+use scripting::{self, ScriptInterface};
 use session::Session;
 use std::char;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use super::resin;
-use super::resin::Interpreter;
 use tome::{FormattedString, RingBuffer, keys};
 
 pub struct Context {
@@ -17,7 +16,7 @@ pub struct Context {
     pub key_names_to_codes: HashMap<String, Vec<u8>>,
     pub history: Indexed<RingBuffer<FormattedString>>,
     pub cursor_index: usize,
-    pub interpreter: resin::Interpreter,
+    pub script_interface: Box<ScriptInterface>,
     pub config_filepath: PathBuf
 }
 
@@ -38,7 +37,7 @@ impl Context {
             key_names_to_codes: key_names_to_codes,
             history: history,
             cursor_index: 0,
-            interpreter: Interpreter::new(),
+            script_interface: scripting::init_interface(),
             config_filepath: config_filepath
         };
         context.set_default_bindings();

@@ -1,5 +1,4 @@
 use context::Context;
-use resin::{Datum, RuntimeError};
 use scripting::{self, ScriptAction};
 use std::fs::File;
 use std::io;
@@ -41,40 +40,15 @@ pub fn send_input(context: &mut Context) -> bool {
     // the contents of the input line.
     let input_line_contents = formatted_string::to_string(
         context.history.data.get_recent(context.history.index()));
-    let hook = context.interpreter.root().get("send-input-hook");
-    if let Some(h) = hook {
-        // Evaluate the hook with the input.
-        let expr = list!(h, Datum::String(input_line_contents.clone()));
-        let eval_result = context.interpreter.evaluate_datum(&expr);
-        match eval_result {
-            Ok(d) => {
-                d.as_vec().0.into_iter().map(|action| {
-                    let _ = do_action(action, context).map_err(|_| {
-                        // Write the warning to the scrollback buffer.
-                        write_scrollback(context,
-                            formatted_string::with_color(
-                                &format!("Warning: non-action received from input hook\n"),
-                                Color::Yellow));
-                    });
-                }).last();
-            },
-            Err((e, trace)) => {
-                // Write the error to the scrollback buffer.
-                write_scrollback(context,
-                    formatted_string::with_color(
-                        &format!("Script error: {}\n{}\n", &e.msg, &trace),
-                        Color::Red));
-            }
+    match context.script_interface.send_input_hook(&input_line_contents) {
+        Ok(actions) => {
+            actions.into_iter().map(|action| do_action(&action, context)).last();
+        },
+        Err(e) => {
+            // Write the error to the scrollback buffer.
+            write_scrollback(context,
+                formatted_string::with_color(&e, Color::Red));
         }
-    } else {
-        // No hook exists; simply send the input.
-        send_data(context, &input_line_contents, true);
-
-        // Add to the scrollback buffer.
-        write_scrollback(context,
-            formatted_string::with_color(
-                &format!("{}\n", &input_line_contents),
-                Color::Yellow));
     }
 
     // Add the input to the history and clear the input line.
@@ -98,30 +72,23 @@ pub fn send_input(context: &mut Context) -> bool {
     true
 }
 // Helper function to run a script action.
-fn do_action(action: Datum, context: &mut Context) -> Result<(), RuntimeError> {
+fn do_action(action: &ScriptAction, context: &mut Context) {
     match action {
-        d @ Datum::Ext(..) => {
-            let action = try_unwrap_arg!(d => ScriptAction);
-            match action {
-                &ScriptAction::ReloadConfig => {
-                    reload_config(context);
-                },
-                &ScriptAction::WriteScrollback(ref fs) => {
-                    write_scrollback(context, fs.clone());
-                }
-                &ScriptAction::SendInput(ref s) => {
-                    send_data(context, &s, true);
-
-                    // Add to the scrollback buffer.
-                    write_scrollback(context,
-                        formatted_string::with_color(
-                            &format!("{}\n", &s),
-                            Color::Yellow));
-                }
-            }
-            Ok(())
+        &ScriptAction::ReloadConfig => {
+            reload_config(context);
         },
-        _ => runtime_error!("Non-action returned from the input hook")
+        &ScriptAction::WriteScrollback(ref fs) => {
+            write_scrollback(context, fs.clone());
+        }
+        &ScriptAction::SendInput(ref s) => {
+            send_data(context, &s, true);
+
+            // Add to the scrollback buffer.
+            write_scrollback(context,
+                formatted_string::with_color(
+                    &format!("{}\n", &s),
+                    Color::Yellow));
+        }
     }
 }
 pub fn cursor_left(context: &mut Context) -> bool {
@@ -163,10 +130,10 @@ pub fn delete_to_cursor(context: &mut Context) -> bool {
 }
 pub fn reload_config(context: &mut Context) -> bool {
     // Read the config file (if it exists).
-    context.interpreter = scripting::init_interpreter();
+    context.script_interface = scripting::init_interface();
     match read_file_contents(&context.config_filepath) {
         Ok(contents) => {
-            if let Err(e) = context.interpreter.evaluate(&contents) {
+            if let Err(e) = context.script_interface.evaluate(&contents) {
                 write_scrollback(context,
                     formatted_string::with_color(
                     &format!("Warning: config file error:\n{}\n", e),

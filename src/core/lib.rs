@@ -2,7 +2,6 @@
 #[macro_use] extern crate log;
 extern crate mio;
 extern crate regex;
-#[macro_use] extern crate resin;
 extern crate term;
 
 pub mod esc_seq;

@@ -2,7 +2,7 @@ extern crate argparse;
 extern crate log4rs;
 #[macro_use] extern crate log;
 extern crate mio;
-#[macro_use] extern crate resin;
+#[macro_use] extern crate resin; // TODO: conditional compilation
 extern crate tome;
 extern crate xdg;
 
@@ -122,11 +122,6 @@ impl Handler for MainHandler {
             }
         } else if token == mio::Token(1) {
             let mut buffer = [0; 4096];
-            actions::write_scrollback(
-                &mut self.context,
-                formatted_string::with_color(
-                    &format!("Data received!\n"), Color::Red));
-            update_ui(&mut self.ui, &self.context);
             let bytes_read = self.context.current_session_mut().
                 connection.read(&mut buffer);
             match bytes_read {
