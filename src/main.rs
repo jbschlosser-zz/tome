@@ -2,6 +2,7 @@ extern crate argparse;
 extern crate log4rs;
 #[macro_use] extern crate log;
 extern crate mio;
+extern crate regex;
 #[macro_use] extern crate resin; // TODO: conditional compilation
 extern crate tome;
 extern crate xdg;
@@ -10,7 +11,6 @@ mod actions;
 mod context;
 mod indexed;
 mod scripting;
-mod server_data;
 mod session;
 mod ui;
 
@@ -126,10 +126,14 @@ impl Handler for MainHandler {
                 connection.read(&mut buffer);
             match bytes_read {
                 Ok(a) =>  {
-                    let string = server_data::handle_server_data(&buffer[0..a],
-                        self.context.current_session_mut());
-                    actions::write_scrollback(
-                        &mut self.context, string);
+                    if a > 0 {
+                        actions::receive_data(&mut self.context, &buffer[0..a]);
+                        update_ui(&mut self.ui, &self.context);
+                    } else {
+                        // Reading 0 bytes indicates the connection was closed.
+                        //event_loop.deregister(
+                        //    &self.context.current_session().connection);
+                    }
 
                     update_ui(&mut self.ui, &self.context);
                 },

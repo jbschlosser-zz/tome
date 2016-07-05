@@ -26,6 +26,10 @@ impl ResinScriptInterface {
                 let s = try_unwrap_arg!(args[0] => String).clone();
                 Ok(Datum::ext(ScriptAction::SendInput(s), "action:send"))
             });
+            root.define_fn("tome:reconnect", |args: &[Datum]| {
+                expect_args!(args == 0);
+                Ok(Datum::ext(ScriptAction::Reconnect, "action:reconnect"))
+            });
         });
 
         ResinScriptInterface { interp: interp }

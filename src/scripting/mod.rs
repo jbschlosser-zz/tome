@@ -7,7 +7,8 @@ use self::resin_interface::ResinScriptInterface;
 pub enum ScriptAction {
     ReloadConfig,
     WriteScrollback(FormattedString),
-    SendInput(String)
+    SendInput(String),
+    Reconnect
 }
 
 pub trait ScriptInterface {
