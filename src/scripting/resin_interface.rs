@@ -1,4 +1,4 @@
-use super::super::tome::formatted_string::{self, FormattedString};
+use super::super::tome::formatted_string::{self, Format, FormattedString};
 use resin::{Datum, Interpreter, RuntimeError};
 use scripting::{ScriptAction, ScriptInterface};
 
@@ -16,9 +16,17 @@ impl ResinScriptInterface {
             });
             root.define_fn("tome:write-scrollback", |args: &[Datum]| {
                 expect_args!(args == 1);
-                let fs = try_unwrap_arg!(args[0] => FormattedString);
-                Ok(Datum::ext(ScriptAction::WriteScrollback(fs.clone()),
-                              "action:write-scrollback"))
+                // First try unwrapping a FormattedString.
+                let fs = match unwrap_arg!(args[0] => FormattedString) {
+                    Ok(f) => f.clone(),
+                    Err(_) => {
+                        // Try string next.
+                        let string = try_unwrap_arg!(args[0] => String);
+                        formatted_string::with_format(string, Format::default())
+                    }
+                };
+                Ok(Datum::ext(ScriptAction::WriteScrollback(fs),
+                    "action:write-scrollback"))
             });
             root.define_fn("tome:send", |args: &[Datum]| {
                 expect_args!(args == 1);
@@ -34,6 +42,11 @@ impl ResinScriptInterface {
                 let string = try_unwrap_arg!(args[0] => String);
                 Ok(Datum::ext(formatted_string::from_markup(string),
                     "formatted-string"))
+            });
+            root.define_fn("tome:fstring-to-string", |args: &[Datum]| {
+                expect_args!(args == 1);
+                let fs = try_unwrap_arg!(args[0] => FormattedString);
+                Ok(Datum::String(formatted_string::to_string(fs)))
             });
         });
 
