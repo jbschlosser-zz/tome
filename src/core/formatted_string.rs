@@ -53,6 +53,36 @@ pub fn with_color(s: &str, color: Color) -> FormattedString {
     with_format(s, Format::with_fg(color))
 }
 
+pub fn from_markup(s: &str) -> FormattedString {
+    let mut fs = Vec::new();
+    let mut format = Format::default();
+    let mut escape = false;
+    for c in s.chars() {
+        if escape {
+            match c {
+                '{' => fs.push((c, format)),
+                'x' => format = Format::default(),
+                'b' => format.fg_color = Color::Black,
+                'r' => format.fg_color = Color::Red,
+                'g' => format.fg_color = Color::Green,
+                'y' => format.fg_color = Color::Yellow,
+                'u' => format.fg_color = Color::Blue,
+                'm' => format.fg_color = Color::Magenta,
+                'c' => format.fg_color = Color::Cyan,
+                'w' => format.fg_color = Color::White,
+                'h' => format.style = Style::Standout,
+                _ => () // Unknown escape sequence.
+            }
+            escape = false;
+        } else if c == '{' {
+            escape = true;
+        } else {
+            fs.push((c, format));
+        }
+    }
+    fs
+}
+
 pub fn to_string(fs: &FormattedString) -> String {
     let string: String = fs.iter().map(|&(ch, _)| ch).collect();
     string

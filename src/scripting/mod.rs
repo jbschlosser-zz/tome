@@ -12,9 +12,9 @@ pub enum ScriptAction {
 }
 
 pub trait ScriptInterface {
-    fn send_input_hook(&mut self, input: &str) ->
+    fn send_hook(&mut self, input: &str) ->
         Result<Vec<ScriptAction>, String>;
-    fn recv_data_hook(&mut self, data: &FormattedString) ->
+    fn recv_hook(&mut self, data: &FormattedString) ->
         Result<Vec<ScriptAction>, String>;
     fn evaluate(&mut self, s: &str) -> Result<(), String>;
 }

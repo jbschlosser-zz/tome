@@ -43,7 +43,7 @@ pub fn send_input(context: &mut Context) -> bool {
     // the contents of the input line.
     let input_line_contents = formatted_string::to_string(
         context.history.data.get_recent(context.history.index()));
-    match context.script_interface.send_input_hook(&input_line_contents) {
+    match context.script_interface.send_hook(&input_line_contents) {
         Ok(actions) => {
             actions.into_iter().map(|action| do_action(&action, context)).last();
         },
@@ -207,7 +207,16 @@ pub fn insert_input_char(context: &mut Context, ch: char) {
 }
 pub fn receive_data(context: &mut Context, data: &[u8]) {
     let string = handle_server_data(data, context.current_session_mut());
-    write_scrollback(context, string);
+    match context.script_interface.recv_hook(&string) {
+        Ok(actions) => {
+            actions.into_iter().map(|action| do_action(&action, context)).last();
+        },
+        Err(e) => {
+            // Write the error to the scrollback buffer.
+            write_scrollback(context,
+                formatted_string::with_color(&e, Color::Red));
+        }
+    }
 }
 // Helper function to deal with incoming data from the server.
 fn handle_server_data(data: &[u8], session: &mut Session) -> FormattedString {

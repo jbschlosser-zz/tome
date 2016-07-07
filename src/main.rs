@@ -131,8 +131,8 @@ impl Handler for MainHandler {
                         update_ui(&mut self.ui, &self.context);
                     } else {
                         // Reading 0 bytes indicates the connection was closed.
-                        //event_loop.deregister(
-                        //    &self.context.current_session().connection);
+                        event_loop.deregister(
+                            &self.context.current_session().connection);
                     }
 
                     update_ui(&mut self.ui, &self.context);

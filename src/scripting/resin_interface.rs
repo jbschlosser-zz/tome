@@ -1,4 +1,4 @@
-use super::super::tome::formatted_string::{self, Color, FormattedString};
+use super::super::tome::formatted_string::{self, FormattedString};
 use resin::{Datum, Interpreter, RuntimeError};
 use scripting::{ScriptAction, ScriptInterface};
 
@@ -16,9 +16,8 @@ impl ResinScriptInterface {
             });
             root.define_fn("tome:write-scrollback", |args: &[Datum]| {
                 expect_args!(args == 1);
-                let s = try_unwrap_arg!(args[0] => String);
-                let fs = formatted_string::with_color(&s, Color::Default);
-                Ok(Datum::ext(ScriptAction::WriteScrollback(fs),
+                let fs = try_unwrap_arg!(args[0] => FormattedString);
+                Ok(Datum::ext(ScriptAction::WriteScrollback(fs.clone()),
                               "action:write-scrollback"))
             });
             root.define_fn("tome:send", |args: &[Datum]| {
@@ -30,6 +29,12 @@ impl ResinScriptInterface {
                 expect_args!(args == 0);
                 Ok(Datum::ext(ScriptAction::Reconnect, "action:reconnect"))
             });
+            root.define_fn("tome:make-fstring", |args: &[Datum]| {
+                expect_args!(args == 1);
+                let string = try_unwrap_arg!(args[0] => String);
+                Ok(Datum::ext(formatted_string::from_markup(string),
+                    "formatted-string"))
+            });
         });
 
         ResinScriptInterface { interp: interp }
@@ -37,10 +42,10 @@ impl ResinScriptInterface {
 }
 
 impl ScriptInterface for ResinScriptInterface {
-    fn send_input_hook(&mut self, input: &str) ->
+    fn send_hook(&mut self, input: &str) ->
         Result<Vec<ScriptAction>, String>
     {
-        let hook = self.interp.root().get("send-input-hook");
+        let hook = self.interp.root().get("send-hook");
         if let Some(h) = hook {
             // Evaluate the hook with the input.
             let expr = list!(h, Datum::String(String::from(input)));
@@ -64,10 +69,32 @@ impl ScriptInterface for ResinScriptInterface {
             Ok(vec![ScriptAction::SendInput(String::from(input))])
         }
     }
-    fn recv_data_hook(&mut self, _: &FormattedString) ->
+    fn recv_hook(&mut self, data: &FormattedString) ->
         Result<Vec<ScriptAction>, String>
     {
-        unimplemented!();
+        let hook = self.interp.root().get("recv-hook");
+        if let Some(h) = hook {
+            // Evaluate the hook with the input.
+            let expr = list!(h, Datum::ext(data.clone(), "formatted-string"));
+            let eval_result = self.interp.evaluate_datum(&expr);
+            match eval_result {
+                Ok(d) => {
+                    let mut actions = Vec::<ScriptAction>::new();
+                    for da in d.as_vec().0.into_iter() {
+                        match unwrap_arg!(da => ScriptAction) {
+                            Ok(a) => actions.push(a),
+                            Err(_) => return Err(String::from("Non-action returned"))
+                        }
+                    }
+                    Ok(actions)
+                },
+                Err((e, trace)) => {
+                    Err(format!("Script error: {}\n{}\n", &e.msg, &trace))
+                }
+            }
+        } else {
+            Ok(vec![ScriptAction::WriteScrollback(data.clone())])
+        }
     }
     fn evaluate(&mut self, s: &str) -> Result<(), String>
     {

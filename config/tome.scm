@@ -38,14 +38,14 @@
 
 ; ===== COMMAND SENDING ======
 ; Function to run on input. Returns a list of actions to perform.
-(define send-input-hook
+(define send-hook
   (lambda (input)
     (cond
       ((string=? input "") (list (tome:send input))) ; Empty input.
       ((string-contains input ";")
-       (apply append (map send-input-hook (string-split input #\;)))) ; Multiple commands.
+       (apply append (map send-hook (string-split input #\;)))) ; Multiple commands.
       ((hash-ref aliases input)
-       (send-input-hook (hash-ref aliases input))) ; Aliases (recursive).
+       (send-hook (hash-ref aliases input))) ; Aliases (recursive).
       ((string-prefix? "#" input) ; Command
        (run-command (substring input 1)))
       ;((string-prefix? "/" input) ; Search.
@@ -53,6 +53,12 @@
       ;   (search-backwards (substring input 1))
       ;   '())) ; Note that an empty list is returned.
       (else (list (tome:send input)))))) ; Everything else.
+
+; Function to run when data is received from the server. Returns a list
+; of actions to perform.
+(define recv-hook
+  (lambda (data)
+    (tome:write-scrollback data)))
 
 ; ===== MUD-SPECIFIC STUFF =====
 (define-alias "test" "4n4e")
