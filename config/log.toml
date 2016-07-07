@@ -2,11 +2,11 @@
 refresh_rate = 30
 
 # An appender named "stdout" that writes to stdout
-[appender.stdout]
+[appenders.stdout]
 kind = "console"
 
 # An appender that writes to a file with a custom pattern
-[appender.file]
+[appenders.file]
 kind = "file"
 path = "./the.log"
 pattern = "%d_%m"
