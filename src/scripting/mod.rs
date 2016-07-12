@@ -8,7 +8,8 @@ pub enum ScriptAction {
     ReloadConfig,
     WriteScrollback(FormattedString),
     SendInput(String),
-    Reconnect
+    Reconnect,
+    SearchBackwards(String)
 }
 
 pub trait ScriptInterface {

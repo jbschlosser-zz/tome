@@ -48,6 +48,12 @@ impl ResinScriptInterface {
                 let fs = try_unwrap_arg!(args[0] => FormattedString);
                 Ok(Datum::String(formatted_string::to_string(fs)))
             });
+            root.define_fn("tome:search-backwards", |args: &[Datum]| {
+                expect_args!(args == 1);
+                let s = try_unwrap_arg!(args[0] => String);
+                Ok(Datum::ext(ScriptAction::SearchBackwards(s.clone()),
+                    "action:search-backwards"))
+            });
         });
 
         ResinScriptInterface { interp: interp }

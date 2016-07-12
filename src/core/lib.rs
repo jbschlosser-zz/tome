@@ -9,6 +9,7 @@ pub mod formatted_string;
 pub mod keys;
 mod parse_state;
 mod ring_buffer;
+pub mod search;
 pub mod telnet;
 
 pub use formatted_string::{FormattedString, Format, Color, Style};

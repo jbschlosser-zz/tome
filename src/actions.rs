@@ -6,8 +6,8 @@ use std::io;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use session::Session;
-use tome::{formatted_string, Color, Format, FormattedString, RingBuffer,
-    esc_seq, telnet, ParseState};
+use tome::{formatted_string, Style, Color, Format, FormattedString, RingBuffer,
+    esc_seq, search, telnet, ParseState};
 
 // Actions to be used directly for key bindings.
 pub fn quit(_: &mut Context) -> bool { false }
@@ -82,7 +82,7 @@ fn do_action(action: &ScriptAction, context: &mut Context) {
         },
         &ScriptAction::WriteScrollback(ref fs) => {
             write_scrollback(context, fs.clone());
-        }
+        },
         &ScriptAction::SendInput(ref s) => {
             send_data(context, &s, true);
 
@@ -91,9 +91,12 @@ fn do_action(action: &ScriptAction, context: &mut Context) {
                 formatted_string::with_color(
                     &format!("{}\n", &s),
                     Color::Yellow));
-        }
+        },
         &ScriptAction::Reconnect => {
             reconnect(context);
+        },
+        &ScriptAction::SearchBackwards(ref s) => {
+            search_backwards(context, s)
         }
     }
 }
@@ -204,6 +207,43 @@ pub fn insert_input_char(context: &mut Context, ch: char) {
     context.history.data.get_recent_mut(hist_index).insert(
         context.cursor_index, (ch, Format::default()));
     context.cursor_index += 1;
+}
+pub fn search_backwards(context: &mut Context, search_str: &str) {
+    let sess = context.current_session_mut();
+    let start_line = match sess.prev_search_result {
+        Some(p) => p.line_number + 1,
+        None => 0
+    };
+    let this_result = match search::search_buffer(
+        &sess.scrollback_buf.data, search_str, start_line)
+    {
+        Ok(r) => r,
+        Err(_) => return // TODO: Add more.
+    };
+
+    // Un-highlight the old search result if there is one.
+    if let Some(r) = sess.prev_search_result {
+        let line = sess.scrollback_buf.data.get_recent_mut(r.line_number);
+        highlight_string(line, r.begin_index, r.end_index, false);
+    }
+
+    // Highlight the new search result.
+    if let Some(r) = this_result {
+        sess.scrollback_buf.increment_index(r.line_number - start_line);
+        let line = sess.scrollback_buf.data.get_recent_mut(r.line_number);
+        highlight_string(line, r.begin_index, r.end_index, true);
+    }
+
+    // Store the new search result.
+    sess.prev_search_result = this_result;
+}
+fn highlight_string(s: &mut FormattedString, start: usize, end: usize, on: bool) {
+    for i in start..end {
+        let (ch, format) = s[i];
+        let mut new_format = format.clone();
+        new_format.style = if on {Style::Standout} else {Style::Normal};
+        s[i] = (ch, new_format);
+    }
 }
 pub fn receive_data(context: &mut Context, data: &[u8]) {
     let string = handle_server_data(data, context.current_session_mut());
