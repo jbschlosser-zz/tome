@@ -14,13 +14,12 @@ pub struct Session {
 
 impl Session {
     pub fn new(connection: TcpStream,
-        buffer: RingBuffer<FormattedString>) -> Session
+        mut buffer: Indexed<RingBuffer<FormattedString>>) -> Session
     {
-        let mut scrollback_buf = Indexed::<_>::new(buffer);
-        if scrollback_buf.data.len() == 0 {
+        if buffer.data.len() == 0 {
             // Ensure that a line is present so that the buffer
             // can be indexed.
-            scrollback_buf.data.push(FormattedString::new());
+            buffer.data.push(FormattedString::new());
         }
         Session {
             connection: connection,
@@ -31,7 +30,7 @@ impl Session {
                 fg_color: Color::Default,
                 bg_color: Color::Default
             },
-            scrollback_buf: scrollback_buf,
+            scrollback_buf: buffer,
             prev_search_result: None
         }
     }

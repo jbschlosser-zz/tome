@@ -17,17 +17,19 @@ pub struct Context {
     pub history: Indexed<RingBuffer<FormattedString>>,
     pub cursor_index: usize,
     pub script_interface: Box<ScriptInterface>,
-    pub config_filepath: PathBuf
+    pub config_filepath: PathBuf,
+    pub viewport_lines: usize
 }
 
 impl Context {
-    pub fn new(config_filepath: PathBuf) -> Context {
+    pub fn new(config_filepath: PathBuf, viewport_lines: usize) -> Context {
         let key_codes_to_names = keys::get_key_codes_to_names();
         let mut key_names_to_codes = HashMap::new();
         for (code, name) in key_codes_to_names.iter() {
             key_names_to_codes.insert(name.clone(), code.clone());
         }
-        let mut history = Indexed::<_>::new(RingBuffer::new(None));
+        let mut history = Indexed::<_>::new(RingBuffer::new(None),
+            |buf| buf.len() - 1);
         history.data.push(FormattedString::new());
         let mut context = Context {
             sessions: Vec::new(),
@@ -38,7 +40,8 @@ impl Context {
             history: history,
             cursor_index: 0,
             script_interface: scripting::init_interface(),
-            config_filepath: config_filepath
+            config_filepath: config_filepath,
+            viewport_lines: viewport_lines
         };
         context.set_default_bindings();
         context

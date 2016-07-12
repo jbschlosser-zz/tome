@@ -17,12 +17,14 @@ mod ui;
 use argparse::{ArgumentParser, Store};
 use mio::Handler;
 use mio::tcp::TcpStream;
+use std::cmp;
 use std::io::Read;
 use std::net::{SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use context::Context;
+use indexed::Indexed;
 use session::Session;
 use ui::UserInterface;
 use tome::{formatted_string, Color, RingBuffer};
@@ -144,6 +146,13 @@ impl Handler for MainHandler {
     fn interrupted(&mut self, _: &mut mio::EventLoop<Self>) {
         // Resize.
         self.ui.restart();
+        let viewport_lines = self.ui.output_win_height();
+        for session in self.context.sessions.iter_mut() {
+            session.scrollback_buf.set_limit(
+                move |buf| {
+                    cmp::max(buf.len(), viewport_lines) - viewport_lines
+                });
+        }
         update_ui(&mut self.ui, &self.context);
     }
 }
@@ -186,6 +195,10 @@ fn main() {
     event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
         mio::PollOpt::empty()).unwrap();
 
+    // Initialize the UI.
+    let ui = UserInterface::init();
+    let viewport_lines = ui.output_win_height();
+
     // Look for the config file; use a default path if something goes wrong.
     let config_filepath = get_config_filepath()
         .unwrap_or_else(|_| {
@@ -195,11 +208,12 @@ fn main() {
         });
 
     // Set up the context.
-    let mut context = Context::new(config_filepath);
-    context.sessions.push(Session::new(stream, RingBuffer::new(None)));
-
-    // Initialize the UI.
-    let ui = UserInterface::init();
+    let mut context = Context::new(config_filepath, viewport_lines);
+    context.sessions.push(Session::new(stream,
+        Indexed::<_>::new(RingBuffer::new(None),
+            move |buf| {
+                cmp::max(buf.len(), viewport_lines) - viewport_lines
+            })));
 
     // Load the config file.
     actions::reload_config(&mut context);
