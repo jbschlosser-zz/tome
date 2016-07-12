@@ -15,3 +15,4 @@ pub mod telnet;
 pub use formatted_string::{FormattedString, Format, Color, Style};
 pub use parse_state::ParseState;
 pub use ring_buffer::RingBuffer;
+pub use search::SearchResult;
