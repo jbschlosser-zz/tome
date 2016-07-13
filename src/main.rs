@@ -147,6 +147,7 @@ impl Handler for MainHandler {
         // Resize.
         self.ui.restart();
         let viewport_lines = self.ui.output_win_height();
+        self.context.viewport_lines = viewport_lines;
         for session in self.context.sessions.iter_mut() {
             session.scrollback_buf.set_limit(
                 move |buf| {

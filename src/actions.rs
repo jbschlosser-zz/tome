@@ -12,11 +12,13 @@ use tome::{formatted_string, Style, Color, Format, FormattedString, RingBuffer,
 // Actions to be used directly for key bindings.
 pub fn quit(_: &mut Context) -> bool { false }
 pub fn prev_page(context: &mut Context) -> bool {
-    context.current_session_mut().scrollback_buf.increment_index(1);
+    let lines = context.viewport_lines / 2;
+    context.current_session_mut().scrollback_buf.increment_index(lines);
     true
 }
 pub fn next_page(context: &mut Context) -> bool {
-    context.current_session_mut().scrollback_buf.decrement_index(1);
+    let lines = context.viewport_lines / 2;
+    context.current_session_mut().scrollback_buf.decrement_index(lines);
     true
 }
 pub fn backspace_input(context: &mut Context) -> bool {
@@ -209,6 +211,7 @@ pub fn insert_input_char(context: &mut Context, ch: char) {
     context.cursor_index += 1;
 }
 pub fn search_backwards(context: &mut Context, search_str: &str) {
+    let viewport_lines = context.viewport_lines;
     let sess = context.current_session_mut();
     let start_line = match sess.prev_search_result {
         Some(p) => p.line_number + 1,
@@ -229,7 +232,9 @@ pub fn search_backwards(context: &mut Context, search_str: &str) {
 
     // Highlight the new search result.
     if let Some(r) = this_result {
-        sess.scrollback_buf.increment_index(r.line_number - start_line);
+        let line_number = if r.line_number < viewport_lines {0}
+            else {r.line_number - viewport_lines + 1};
+        sess.scrollback_buf.set_index(line_number);
         let line = sess.scrollback_buf.data.get_recent_mut(r.line_number);
         highlight_string(line, r.begin_index, r.end_index, true);
     }
