@@ -9,7 +9,7 @@ log = "*"
 regex = "*"
 term = "*"
 lazy_static = "*"
-log4rs = { version = "*", features = ["toml"] }
+log4rs = "*"
 xdg = "^2.0"
 
 [dependencies.mio]

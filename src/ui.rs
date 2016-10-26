@@ -48,7 +48,7 @@ pub struct UserInterface {
 impl UserInterface {
     pub fn init() -> UserInterface {
         ncurses::initscr();
-        ncurses::keypad(ncurses::stdscr, true);
+        ncurses::keypad(ncurses::stdscr(), true);
         ncurses::cbreak();
         ncurses::noecho();
 
@@ -126,8 +126,8 @@ impl UserInterface {
             }
         }
     }
-    pub fn width() -> usize { Self::win_width(ncurses::stdscr) }
-    pub fn height() -> usize { Self::win_height(ncurses::stdscr) }
+    pub fn width() -> usize { Self::win_width(ncurses::stdscr()) }
+    pub fn height() -> usize { Self::win_height(ncurses::stdscr()) }
     pub fn output_win_height(&self) -> usize {
         Self::win_height(self.output_win)
     }

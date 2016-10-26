@@ -15,7 +15,7 @@ mod session;
 mod ui;
 
 use argparse::{ArgumentParser, Store};
-use mio::Handler;
+use mio::*;
 use mio::tcp::TcpStream;
 use std::cmp;
 use std::io::Read;
@@ -52,115 +52,9 @@ fn get_config_filepath() -> Result<PathBuf, String> {
     }
 }
 
-struct MainHandler {
-    context: Context,
-    ui: UserInterface
-}
-
-impl MainHandler {
-    pub fn new(context: Context, ui: UserInterface) -> Self {
-        MainHandler {context: context, ui: ui}
-    }
-}
-
-impl Handler for MainHandler {
-    type Timeout = mio::tcp::TcpStream;
-    type Message = ();
-
-    fn ready(&mut self,
-        event_loop: &mut mio::EventLoop<Self>,
-        token: mio::Token,
-        _: mio::EventSet)
-    {
-        if token == mio::Token(0) {
-            // Read the input from stdin.
-            let mut stdin = std::io::stdin();
-            let mut buf = vec![0; 4096];
-            let num = match stdin.read(&mut buf) {
-                Ok(num) => num,
-                Err(_) => 0
-            };
-
-            // Parse the bytes into keycodes.
-            let mut keys_pressed = vec![];
-            let mut esc_seq: Vec<u8> = vec![];
-            for c in buf[0..num].iter() {
-                if esc_seq.len() > 0 {
-                    esc_seq.push(*c);
-                    if self.context.key_codes_to_names.contains_key(&esc_seq) {
-                        keys_pressed.push(esc_seq.clone());
-                        esc_seq.clear();
-                    }
-                } else {
-                    if *c == 27 { esc_seq.push(*c) } else {
-                        keys_pressed.push(vec![*c]);
-                    }
-                }
-            }
-            if esc_seq.len() > 0 {
-                keys_pressed.push(esc_seq.clone());
-            }
-
-            // Do the bindings.
-            for keycode in keys_pressed.iter() {
-                let keep_going = self.context.do_binding(keycode);
-                match keep_going {
-                    Some(kp) => {
-                        if kp {
-                            update_ui(&mut self.ui, &self.context);
-                        } else {
-                            event_loop.shutdown();
-                        }
-                    },
-                    None => {
-                        actions::write_scrollback(
-                            &mut self.context,
-                            formatted_string::with_color(
-                                &format!("No binding found for keycode: {:?}\n",
-                                keycode), Color::Red));
-                        update_ui(&mut self.ui, &self.context);
-                    }
-                }
-            }
-        } else if token == mio::Token(1) {
-            let mut buffer = [0; 4096];
-            let bytes_read = self.context.current_session_mut().
-                connection.read(&mut buffer);
-            match bytes_read {
-                Ok(a) =>  {
-                    if a > 0 {
-                        actions::receive_data(&mut self.context, &buffer[0..a]);
-                        update_ui(&mut self.ui, &self.context);
-                    } else {
-                        // Reading 0 bytes indicates the connection was closed.
-                        event_loop.deregister(
-                            &self.context.current_session().connection);
-                    }
-
-                    update_ui(&mut self.ui, &self.context);
-                },
-                Err(_) => panic!("Error when reading from socket")
-            }
-        }
-    }
-    fn interrupted(&mut self, _: &mut mio::EventLoop<Self>) {
-        // Resize.
-        self.ui.restart();
-        let viewport_lines = self.ui.output_win_height();
-        self.context.viewport_lines = viewport_lines;
-        for session in self.context.sessions.iter_mut() {
-            session.scrollback_buf.set_limit(
-                move |buf| {
-                    cmp::max(buf.len(), viewport_lines) - viewport_lines
-                });
-        }
-        update_ui(&mut self.ui, &self.context);
-    }
-}
-
 fn main() {
     // Enable logging.
-    log4rs::init_file("config/log.toml", Default::default()).unwrap();
+    log4rs::init_file("config/log.yaml", Default::default()).unwrap();
 
     // Parse arguments.
     let mut host = "127.0.0.1".to_string();
@@ -176,13 +70,13 @@ fn main() {
         ap.parse_args_or_exit();
     }
 
-    // Set up event loop.
-    let mut event_loop = mio::EventLoop::new().unwrap();
+    // Set up polling.
+    let poll = Poll::new().unwrap();
 
     // Monitor stdin.
-    let stdin = mio::Io::from_raw_fd(0);
-    event_loop.register(&stdin, mio::Token(0), mio::EventSet::readable(),
-        mio::PollOpt::empty()).unwrap();
+    let stdin_fd = 0;
+    let stdin = mio::unix::EventedFd(&stdin_fd);
+    poll.register(&stdin, Token(0), Ready::readable(), PollOpt::level()).unwrap();
 
     // Connect to the server.
     let addr = match SocketAddr::from_str(&format!("{}:{}", &host, &port)) {
@@ -193,11 +87,10 @@ fn main() {
         }
     };
     let stream = TcpStream::connect(&addr).unwrap();
-    event_loop.register(&stream, mio::Token(1), mio::EventSet::readable(),
-        mio::PollOpt::empty()).unwrap();
+    poll.register(&stream, Token(1), Ready::readable(), PollOpt::level()).unwrap();
 
     // Initialize the UI.
-    let ui = UserInterface::init();
+    let mut ui = UserInterface::init();
     let viewport_lines = ui.output_win_height();
 
     // Look for the config file; use a default path if something goes wrong.
@@ -218,11 +111,124 @@ fn main() {
 
     // Load the config file.
     actions::reload_config(&mut context);
+
+    // Display the initial UI state.
+    update_ui(&mut ui, &context);
     
-    // Run the event loop.
-    let mut handler = MainHandler::new(context, ui);
-    let _ = event_loop.run(&mut handler);
+    // Run the polling loop.
+    let mut events = Events::with_capacity(1024);
+    'main: loop {
+        match poll.poll(&mut events, None) {
+            Err(e) => {
+                match e.kind() {
+                    std::io::ErrorKind::Interrupted => {
+                        // The assumption here is that an interrupted error
+                        // generally corresponds to a screen resize.
+
+                        // Resize.
+                        ui.restart();
+                        let viewport_lines = ui.output_win_height();
+                        context.viewport_lines = viewport_lines;
+                        for session in context.sessions.iter_mut() {
+                            session.scrollback_buf.set_limit(
+                                move |buf| {
+                                    cmp::max(buf.len(), viewport_lines) - viewport_lines
+                                });
+                        }
+                        update_ui(&mut ui, &context);
+                        for session in context.sessions.iter_mut() {
+                            poll.reregister(&session.connection, Token(1), Ready::readable(), PollOpt::edge())
+                                .unwrap();
+                        }
+                    },
+                    _ => break 'main // TODO: Handle this differently?
+                }
+            }
+            _ => ()
+        }
+        for event in events.iter() {
+            match event.token() {
+                Token(0) => {
+                    // Read the input from stdin.
+                    let mut stdin = std::io::stdin();
+                    let mut buf = vec![0; 4096];
+                    let num = match stdin.read(&mut buf) {
+                        Ok(num) => num,
+                        Err(_) => 0
+                    };
+
+                    // Parse the bytes into keycodes.
+                    let mut keys_pressed = vec![];
+                    let mut esc_seq: Vec<u8> = vec![];
+                    for c in buf[0..num].iter() {
+                        if esc_seq.len() > 0 {
+                            esc_seq.push(*c);
+                            if context.key_codes_to_names.contains_key(&esc_seq) {
+                                keys_pressed.push(esc_seq.clone());
+                                esc_seq.clear();
+                            }
+                        } else {
+                            if *c == 27 { esc_seq.push(*c) } else {
+                                keys_pressed.push(vec![*c]);
+                            }
+                        }
+                    }
+                    if esc_seq.len() > 0 {
+                        keys_pressed.push(esc_seq.clone());
+                    }
+
+                    // Do the bindings.
+                    for keycode in keys_pressed.iter() {
+                        let keep_going = context.do_binding(keycode);
+                        match keep_going {
+                            Some(kp) => {
+                                if kp {
+                                    update_ui(&mut ui, &context);
+                                } else {
+                                    // Stop polling.
+                                    break 'main;
+                                }
+                            },
+                            None => {
+                                actions::write_scrollback(
+                                    &mut context,
+                                    formatted_string::with_color(
+                                        &format!("No binding found for keycode: {:?}\n",
+                                        keycode), Color::Red));
+                                update_ui(&mut ui, &context);
+                            }
+                        }
+                    }
+                },
+                Token(1) => {
+                    let mut buffer = [0; 4096];
+                    let bytes_read = context.current_session_mut().
+                        connection.read(&mut buffer);
+                    match bytes_read {
+                        Ok(a) =>  {
+                            if a > 0 {
+                                actions::receive_data(&mut context, &buffer[0..a]);
+                                update_ui(&mut ui, &context);
+                            } else {
+                                // Reading 0 bytes indicates the connection was closed.
+                                poll.deregister(&context.current_session().connection);
+                            }
+
+                            update_ui(&mut ui, &context);
+                        },
+                        Err(e) => {
+                            match e.kind() {
+                                std::io::ErrorKind::WouldBlock => (), // Happens during resizes.
+                                _ => panic!("Error when reading from socket: {:?}", e)
+                            }
+                        }
+                    }
+                },
+                _ => unreachable!()
+            }
+        }
+    }
 
     // Clean up.
-    handler.ui.teardown();
+    ui.teardown();
 }

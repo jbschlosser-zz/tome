@@ -1,0 +1,13 @@
+refresh_rate: 30 seconds
+appenders:
+    stdout:
+        kind: console
+    file:
+        kind: file
+        path: "the.log"
+        encoder:
+            pattern: "{d}_{m}"
+root:
+    level: info
+    appenders:
+        - file
