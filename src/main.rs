@@ -29,29 +29,6 @@ use session::Session;
 use ui::UserInterface;
 use tome::{formatted_string, Color, RingBuffer};
 
-fn update_ui(ui: &mut UserInterface, context: &Context) {
-    let scroll_index = context.current_session().scrollback_buf.index();
-    let history_index = context.history.index();
-    let output_win_height = ui.output_win_height();
-    ui.update(
-        context.current_session().scrollback_buf.data
-            .most_recent(scroll_index + output_win_height),
-        context.history.data.most_recent(history_index + 1),
-        context.cursor_index);
-}
-
-// Helper function to read the config filepath.
-fn get_config_filepath() -> Result<PathBuf, String> {
-    let xdg_dirs = match xdg::BaseDirectories::with_prefix("tome") {
-        Ok(b) => b,
-        Err(e) => return Err(format!("{}", e))
-    };
-    match xdg_dirs.find_config_file("tome.scm") {
-        Some(fp) => Ok(fp),
-        None => Err("Could not find config file".to_string())
-    }
-}
-
 fn main() {
     // Enable logging.
     log4rs::init_file("config/log.yaml", Default::default()).unwrap();
@@ -231,4 +208,27 @@ fn main() {
 
     // Clean up.
     ui.teardown();
+}
+
+fn update_ui(ui: &mut UserInterface, context: &Context) {
+    let scroll_index = context.current_session().scrollback_buf.index();
+    let history_index = context.history.index();
+    let output_win_height = ui.output_win_height();
+    ui.update(
+        context.current_session().scrollback_buf.data
+            .most_recent(scroll_index + output_win_height),
+        context.history.data.most_recent(history_index + 1),
+        context.cursor_index);
+}
+
+// Helper function to read the config filepath.
+fn get_config_filepath() -> Result<PathBuf, String> {
+    let xdg_dirs = match xdg::BaseDirectories::with_prefix("tome") {
+        Ok(b) => b,
+        Err(e) => return Err(format!("{}", e))
+    };
+    match xdg_dirs.find_config_file("tome.scm") {
+        Some(fp) => Ok(fp),
+        None => Err("Could not find config file".to_string())
+    }
 }
